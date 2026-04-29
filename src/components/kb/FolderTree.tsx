@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ChevronRight,
   ChevronDown,
+  Folder,
   FolderClosed,
   FolderOpen,
   Plus,
@@ -22,7 +23,6 @@ import {
   getArticleCount,
   getFolderDepth,
   getFolder,
-  getUnit,
 } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
 
@@ -43,6 +43,7 @@ interface FolderTreeProps {
   allArticlesCount: number;
   onSelectAllArticles: () => void;
   onCreateRootFolder?: () => void;
+  onCreateSubFolder?: (parent: KBFolder | null) => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
 }
 
@@ -169,7 +170,6 @@ function FolderNode({
   const [menuOpen, setMenuOpen] = useState(false);
   const isSelected = selectedFolderId === folder.id;
   const count = getArticleCount(folder.id, viewingUnitId);
-  const sourceUnit = isShared ? getUnit(folder.unitId) : null;
   const isArchived = folder.status === 'archived';
 
   return (
@@ -203,14 +203,13 @@ function FolderNode({
         ) : (
           <span className="w-4 shrink-0" />
         )}
-        <div
-          className={`w-4 h-4 rounded-[3px] flex items-center justify-center shrink-0 ${
+        <Folder
+          className={`w-[18px] h-[18px] shrink-0 ${
             isShared || isArchived ? 'opacity-60' : ''
           }`}
-          style={{ backgroundColor: folder.color }}
-        >
-          <FolderClosed className="w-2.5 h-2.5 text-white" />
-        </div>
+          style={{ color: folder.color, fill: folder.color }}
+          strokeWidth={1.5}
+        />
         <span
           className={`text-[13px] truncate flex-1 ${isArchived ? 'italic line-through' : ''}`}
         >
@@ -222,7 +221,7 @@ function FolderNode({
           </span>
         )}
         {!isArchived && count > 0 && (
-          <span className="text-[11px] text-[#697a9b] tabular-nums shrink-0">
+          <span className="text-[12px] text-[#0052a3] tabular-nums shrink-0">
             {count}
           </span>
         )}
@@ -251,14 +250,6 @@ function FolderNode({
           </div>
         )}
       </div>
-      {sourceUnit && (
-        <div
-          className="text-[11px] text-[#697a9b] -mt-0.5 mb-0.5"
-          style={{ paddingLeft: `${8 + depth * 14 + 4 + 16 + 6}px` }}
-        >
-          {sourceUnit.name}
-        </div>
-      )}
       {expanded && children.length > 0 && (
         <div className="flex flex-col">
           {children.map((child) => (
@@ -289,7 +280,7 @@ function CreateFolderMenu({
 }: {
   selectedOwnFolder: KBFolder | null;
   onCreateRoot: () => void;
-  onCreateSub: (parent: KBFolder) => void;
+  onCreateSub: (parent: KBFolder | null) => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -302,19 +293,14 @@ function CreateFolderMenu({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [onClose]);
 
-  const subDisabled =
-    !selectedOwnFolder ||
-    selectedOwnFolder.status !== 'active' ||
-    getFolderDepth(selectedOwnFolder.id) >= 2;
-
-  let subHelper: string | null = null;
-  if (!selectedOwnFolder) {
-    subHelper = 'Select a folder first';
-  } else if (selectedOwnFolder.status !== 'active') {
-    subHelper = 'Selected folder is archived';
-  } else if (getFolderDepth(selectedOwnFolder.id) >= 2) {
-    subHelper = 'Max depth reached';
-  }
+  // Pre-select the currently selected folder only if it can serve as a parent;
+  // otherwise the dialog's dropdown will fall back to the first eligible folder.
+  const preselect =
+    selectedOwnFolder &&
+    selectedOwnFolder.status === 'active' &&
+    getFolderDepth(selectedOwnFolder.id) < 2
+      ? selectedOwnFolder
+      : null;
 
   return (
     <div
@@ -334,27 +320,14 @@ function CreateFolderMenu({
       </button>
       <button
         type="button"
-        disabled={subDisabled}
         onClick={() => {
-          if (subDisabled || !selectedOwnFolder) return;
-          onCreateSub(selectedOwnFolder);
+          onCreateSub(preselect);
           onClose();
         }}
-        className={`flex items-start gap-2 w-full px-3 py-1.5 text-[13px] text-left ${
-          subDisabled
-            ? 'text-[#a8b1c2] cursor-not-allowed'
-            : 'text-[#1f242e] hover:bg-[#fafbfc]'
-        }`}
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-[13px] text-left text-[#1f242e] hover:bg-[#fafbfc]"
       >
-        <FolderOpen
-          className={`w-3.5 h-3.5 mt-0.5 ${subDisabled ? 'text-[#a8b1c2]' : 'text-[#697a9b]'}`}
-        />
-        <div className="flex flex-col min-w-0">
-          <span>Create sub-folder</span>
-          {subHelper && (
-            <span className="text-[11px] text-[#a8b1c2]">{subHelper}</span>
-          )}
-        </div>
+        <FolderOpen className="w-3.5 h-3.5 text-[#697a9b]" />
+        Create sub-folder
       </button>
     </div>
   );
@@ -370,6 +343,7 @@ export function FolderTree({
   allArticlesCount,
   onSelectAllArticles,
   onCreateRootFolder,
+  onCreateSubFolder,
   onFolderAction,
 }: FolderTreeProps) {
   const version = useFolderVersion();
@@ -441,7 +415,7 @@ export function FolderTree({
               <CreateFolderMenu
                 selectedOwnFolder={selectedOwnFolder}
                 onCreateRoot={() => onCreateRootFolder?.()}
-                onCreateSub={(parent) => onFolderAction?.('create-sub', parent)}
+                onCreateSub={(parent) => onCreateSubFolder?.(parent)}
                 onClose={() => setCreateMenuOpen(false)}
               />
             )}

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  FolderClosed,
+  BookOpen,
   ChevronRight,
+  ChevronDown,
   Plus,
   MoreHorizontal,
   Archive,
@@ -13,7 +14,6 @@ import {
   getChildFolders,
   getArticlesInFolder,
   getArticleCount,
-  getFolderPath,
   getUnit,
 } from '@/data/mock-data';
 import { ArticleRow, ArticleCard } from './ArticleCard';
@@ -94,57 +94,243 @@ function FolderHeaderMenu({
   );
 }
 
-function SubFolderCard({
+/** Colored rounded-square icon used in folder + sub-folder headers.
+ *  When `collapsed` is provided, the inner BookOpen icon swaps to a chevron
+ *  on hover (over the parent `group`), giving a click-to-expand affordance. */
+export function FolderIcon({
+  color,
+  size = 'md',
+  dimmed,
+  collapsed,
+}: {
+  color: string;
+  size?: 'sm' | 'md';
+  dimmed?: boolean;
+  collapsed?: boolean;
+}) {
+  const sizeClasses = size === 'md' ? 'w-7 h-7' : 'w-6 h-6';
+  const iconClasses = size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5';
+  const showChevron = collapsed !== undefined;
+  return (
+    <div
+      className={`${sizeClasses} rounded-lg flex items-center justify-center shrink-0 ${
+        dimmed ? 'opacity-60' : ''
+      }`}
+      style={{ backgroundColor: color }}
+    >
+      <BookOpen
+        className={`${iconClasses} text-white ${
+          showChevron ? 'block group-hover:hidden' : 'block'
+        }`}
+        strokeWidth={2}
+      />
+      {showChevron &&
+        (collapsed ? (
+          <ChevronRight
+            className={`${iconClasses} text-white hidden group-hover:block`}
+          />
+        ) : (
+          <ChevronDown
+            className={`${iconClasses} text-white hidden group-hover:block`}
+          />
+        ))}
+    </div>
+  );
+}
+
+/** Renders a folder's articles as either a card grid or a table.
+ *  Used both for the parent folder's direct articles and for each
+ *  sub-folder section. */
+export function ArticleListBlock({
+  articles,
+  viewMode,
+  onArticleClick,
+}: {
+  articles: KBArticle[];
+  viewMode: 'grid' | 'list';
+  onArticleClick?: (article: KBArticle) => void;
+}) {
+  if (articles.length === 0) return null;
+  if (viewMode === 'grid') {
+    return (
+      <div className="grid grid-cols-3 gap-3 px-4 pb-4">
+        {articles.map((article) => (
+          <ArticleCard
+            key={article.id}
+            article={article}
+            onClick={() => onArticleClick?.(article)}
+          />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <table className="w-full table-fixed">
+      <thead>
+        <tr className="border-y border-[#edeff3] bg-[#fafbfc]">
+          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pl-4 pr-4">
+            Article
+          </th>
+          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[140px]">
+            Unit
+          </th>
+          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
+            Status
+          </th>
+          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
+            Updated
+          </th>
+          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[180px]">
+            Owner
+          </th>
+          <th className="w-[44px] py-2 pr-2"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {articles.map((article) => (
+          <ArticleRow
+            key={article.id}
+            article={article}
+            onClick={() => onArticleClick?.(article)}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** A folder rendered inline as a collapsible section with its own articles.
+ *  Click the icon to toggle collapse; click the name to navigate into the folder.
+ *  Chevron is hidden by default and revealed on hover.
+ *
+ *  When `recursive` is true, the section also renders nested sub-folder sections
+ *  (rendered with size="sm"). Used by AllArticlesView to render a flat
+ *  hierarchy of every visible folder. `search` filters articles by title and
+ *  hides empty sections. */
+export function FolderSection({
   folder,
   viewingUnitId,
-  onClick,
+  showArchived,
+  viewMode,
+  size = 'sm',
+  recursive,
+  search,
+  onArticleClick,
+  onSelectFolder,
 }: {
   folder: KBFolder;
   viewingUnitId: string;
-  onClick: () => void;
+  showArchived: boolean;
+  viewMode: 'grid' | 'list';
+  size?: 'sm' | 'md';
+  recursive?: boolean;
+  search?: string;
+  onArticleClick?: (article: KBArticle) => void;
+  onSelectFolder: (folderId: string) => void;
 }) {
-  const count = getArticleCount(folder.id, viewingUnitId);
-  const childCount = getChildFolders(folder.id).length;
+  const [collapsed, setCollapsed] = useState(false);
+  const isOwn = folder.unitId === viewingUnitId;
   const isArchived = folder.status === 'archived';
+  const allArticles = getArticlesInFolder(folder.id, viewingUnitId, {
+    includeArchived: showArchived && isOwn,
+  });
+  const trimmed = search?.trim().toLowerCase() ?? '';
+  const articles = trimmed
+    ? allArticles.filter((a) => a.title.toLowerCase().includes(trimmed))
+    : allArticles;
+
+  const subFolders = recursive
+    ? getChildFolders(folder.id, { includeArchived: showArchived && isOwn })
+    : [];
+
+  // When searching, hide a section if neither it nor any sub-folder match.
+  if (trimmed && articles.length === 0) {
+    const hasSubMatch = subFolders.some((sf) =>
+      getArticlesInFolder(sf.id, viewingUnitId, {
+        includeArchived: showArchived && isOwn,
+      }).some((a) => a.title.toLowerCase().includes(trimmed))
+    );
+    if (!hasSubMatch) return null;
+  }
+
+  const count = getArticleCount(folder.id, viewingUnitId);
+  const titleClasses =
+    size === 'md'
+      ? 'text-[16px] font-semibold leading-[24px]'
+      : 'text-[14px] font-medium leading-[20px]';
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-2.5 px-3 py-2.5 bg-white border rounded-lg transition-colors text-left ${
-        isArchived
-          ? 'border-dashed border-[#e0e4eb] hover:border-[#c1c7d0] opacity-70'
-          : 'border-[#edeff3] hover:border-[#d0d5dd]'
-      }`}
-    >
-      <div
-        className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
-          isArchived ? 'opacity-60' : ''
-        }`}
-        style={{ backgroundColor: folder.color }}
-      >
-        <FolderClosed className="w-4 h-4 text-white" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div
-          className={`text-[13px] font-medium truncate leading-[18px] ${
-            isArchived ? 'text-[#697a9b] line-through' : 'text-[#1f242e]'
-          }`}
+    <div className="border-b border-[#edeff3]">
+      <div className="flex items-center gap-2 px-4 py-4">
+        <button
+          type="button"
+          onClick={() => setCollapsed((p) => !p)}
+          className="group shrink-0"
+          title={collapsed ? 'Expand' : 'Collapse'}
         >
-          {folder.name}
-        </div>
-        <div className="text-[12px] text-[#697a9b] leading-[16px]">
-          {isArchived
-            ? 'Archived'
-            : `${count} ${count === 1 ? 'article' : 'articles'}${
-                childCount > 0
-                  ? ` · ${childCount} sub-folder${childCount === 1 ? '' : 's'}`
-                  : ''
-              }`}
-        </div>
+          <FolderIcon
+            color={folder.color}
+            size={size}
+            dimmed={isArchived}
+            collapsed={collapsed}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectFolder(folder.id)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+          title={`Open ${folder.name}`}
+        >
+          <span
+            className={`${titleClasses} truncate ${
+              isArchived ? 'text-[#697a9b] line-through' : 'text-[#1f242e]'
+            }`}
+          >
+            {folder.name}
+          </span>
+          <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[12px] font-medium text-[#525f7a] bg-white border border-[#e0e4eb] rounded-lg min-w-[24px] text-center leading-[16px] shrink-0">
+            {count}
+          </span>
+          {isArchived && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-[#525f7a] bg-[#fafbfc] border border-[#e0e4eb] rounded shrink-0">
+              <Archive className="w-3 h-3" />
+              Archived
+            </span>
+          )}
+        </button>
       </div>
-      <ChevronRight className="w-4 h-4 text-[#697a9b] shrink-0" />
-    </button>
+      {!collapsed && (
+        <>
+          {articles.length > 0 ? (
+            <ArticleListBlock
+              articles={articles}
+              viewMode={viewMode}
+              onArticleClick={onArticleClick}
+            />
+          ) : (
+            !recursive && (
+              <div className="px-4 pb-4 text-[13px] text-[#697a9b] italic">
+                No articles in this folder yet.
+              </div>
+            )
+          )}
+          {recursive &&
+            subFolders.map((sf) => (
+              <FolderSection
+                key={sf.id}
+                folder={sf}
+                viewingUnitId={viewingUnitId}
+                showArchived={showArchived}
+                viewMode={viewMode}
+                size="sm"
+                search={search}
+                onArticleClick={onArticleClick}
+                onSelectFolder={onSelectFolder}
+              />
+            ))}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -159,6 +345,7 @@ export function FolderView({
   onFolderAction,
 }: FolderViewProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const folder = getFolder(folderId);
   if (!folder) {
     return (
@@ -170,90 +357,63 @@ export function FolderView({
 
   const isOwn = folder.unitId === viewingUnitId;
   const isArchived = folder.status === 'archived';
+  const isSubFolder = folder.parentFolderId !== null;
   const sourceUnit = getUnit(folder.unitId);
-  const path = getFolderPath(folderId);
   const subFolders = getChildFolders(folderId, { includeArchived: showArchived && isOwn });
   const articles = getArticlesInFolder(folderId, viewingUnitId, {
     includeArchived: showArchived && isOwn,
   });
+  const totalCount = getArticleCount(folderId, viewingUnitId);
 
-  const liveArticleCount = articles.filter((a) => a.status !== 'archived').length;
-  const liveSubFolderCount = subFolders.filter((f) => f.status !== 'archived').length;
   const isEmpty = subFolders.length === 0 && articles.length === 0;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
-      {/* Folder breadcrumb + header */}
-      <div className="px-4 py-4 border-b border-[#edeff3] shrink-0">
-        {path.length > 1 && (
-          <div className="flex items-center gap-1.5 text-[12px] text-[#697a9b] mb-2">
-            {path.map((p, idx) => (
-              <span key={p.id} className="flex items-center gap-1.5">
-                {idx > 0 && <ChevronRight className="w-3 h-3" />}
-                {idx === path.length - 1 ? (
-                  <span className="text-[#1f242e]">{p.name}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onSelectFolder(p.id)}
-                    className="hover:text-[#1f242e]"
-                  >
-                    {p.name}
-                  </button>
-                )}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-start gap-3">
-          <div
-            className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-              isArchived ? 'opacity-60' : ''
-            }`}
-            style={{ backgroundColor: folder.color }}
+      {/* Folder header */}
+      <div className="px-4 py-4 shrink-0">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCollapsed((p) => !p)}
+            className="group shrink-0"
+            title={collapsed ? 'Expand' : 'Collapse'}
           >
-            <FolderClosed className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1
-                className={`text-[20px] font-semibold leading-[28px] ${
-                  isArchived ? 'text-[#697a9b] line-through' : 'text-[#1f242e]'
-                }`}
-              >
-                {folder.name}
-              </h1>
-              <VisibilityBadge visibility={folder.visibility} />
-              {isArchived && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-[#525f7a] bg-[#fafbfc] border border-[#e0e4eb] rounded">
-                  <Archive className="w-3 h-3" />
-                  Archived
-                </span>
-              )}
-              {!isOwn && sourceUnit && (
-                <span className="inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium text-[#525f7a] bg-[#fafbfc] border border-[#e0e4eb] rounded">
-                  Shared from {sourceUnit.name}
-                </span>
-              )}
-            </div>
-            <div className="text-[12px] text-[#697a9b] mt-0.5">
-              {liveArticleCount} article{liveArticleCount === 1 ? '' : 's'}
-              {liveSubFolderCount > 0 &&
-                ` · ${liveSubFolderCount} sub-folder${liveSubFolderCount === 1 ? '' : 's'}`}
-            </div>
+            <FolderIcon
+              color={folder.color}
+              size={isSubFolder ? 'sm' : 'md'}
+              dimmed={isArchived}
+              collapsed={collapsed}
+            />
+          </button>
+          <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+            <h1
+              className={`${
+                isSubFolder
+                  ? 'text-[14px] font-medium leading-[20px]'
+                  : 'text-[16px] font-semibold leading-[24px]'
+              } ${
+                isArchived ? 'text-[#697a9b] line-through' : 'text-[#1f242e]'
+              }`}
+            >
+              {folder.name}
+            </h1>
+            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[12px] font-medium text-[#525f7a] bg-white border border-[#e0e4eb] rounded-lg min-w-[24px] text-center leading-[16px]">
+              {totalCount}
+            </span>
+            <VisibilityBadge visibility={folder.visibility} />
+            {isArchived && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-[#525f7a] bg-[#fafbfc] border border-[#e0e4eb] rounded">
+                <Archive className="w-3 h-3" />
+                Archived
+              </span>
+            )}
+            {!isOwn && sourceUnit && (
+              <span className="inline-flex items-center px-1.5 py-0.5 text-[11px] font-medium text-[#525f7a] bg-[#fafbfc] border border-[#e0e4eb] rounded">
+                Shared from {sourceUnit.name}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {isOwn && !isArchived && (
-              <button
-                type="button"
-                onClick={onCreateArticle}
-                className="flex items-center gap-1.5 h-7 px-2 text-[13px] font-medium text-white bg-[#006bd6] rounded-lg hover:bg-[#0052a3]"
-              >
-                <Plus className="w-4 h-4" />
-                Create article
-              </button>
-            )}
             {isOwn && isArchived && onFolderAction && (
               <button
                 type="button"
@@ -288,7 +448,7 @@ export function FolderView({
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {isEmpty ? (
+        {collapsed ? null : isEmpty ? (
           <EmptyState
             title={
               isArchived
@@ -319,66 +479,30 @@ export function FolderView({
           />
         ) : (
           <>
-            {subFolders.length > 0 && (
-              <section className="px-4 py-4 border-b border-[#edeff3]">
-                <div className="grid grid-cols-2 gap-2">
-                  {subFolders.map((sf) => (
-                    <SubFolderCard
-                      key={sf.id}
-                      folder={sf}
-                      viewingUnitId={viewingUnitId}
-                      onClick={() => onSelectFolder(sf.id)}
-                    />
-                  ))}
-                </div>
-              </section>
+            {/* Direct articles in this folder */}
+            {articles.length > 0 && (
+              <div className="border-b border-[#edeff3]">
+                <ArticleListBlock
+                  articles={articles}
+                  viewMode={viewMode}
+                  onArticleClick={onArticleClick}
+                />
+              </div>
             )}
 
-            {articles.length > 0 && (
-              viewMode === 'grid' ? (
-                <div className="grid grid-cols-3 gap-3 px-4 pt-4 pb-6">
-                  {articles.map((article) => (
-                    <ArticleCard
-                      key={article.id}
-                      article={article}
-                      onClick={() => onArticleClick?.(article)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <table className="w-full table-fixed">
-                  <thead>
-                    <tr className="border-y border-[#edeff3] bg-[#fafbfc]">
-                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pl-4 pr-4">
-                        Article
-                      </th>
-                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[140px]">
-                        Unit
-                      </th>
-                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
-                        Status
-                      </th>
-                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
-                        Updated
-                      </th>
-                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[180px]">
-                        Owner
-                      </th>
-                      <th className="w-[44px] py-2 pr-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {articles.map((article) => (
-                      <ArticleRow
-                        key={article.id}
-                        article={article}
-                        onClick={() => onArticleClick?.(article)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              )
-            )}
+            {/* Sub-folders inline as collapsible sections */}
+            {subFolders.map((sf) => (
+              <FolderSection
+                key={sf.id}
+                folder={sf}
+                viewingUnitId={viewingUnitId}
+                showArchived={showArchived}
+                viewMode={viewMode}
+                size="sm"
+                onArticleClick={onArticleClick}
+                onSelectFolder={onSelectFolder}
+              />
+            ))}
           </>
         )}
       </div>

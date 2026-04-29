@@ -39,7 +39,7 @@ type DialogState =
   | { type: 'none' }
   | { type: 'archive'; article: KBArticle }
   | { type: 'move'; article: KBArticle }
-  | { type: 'create-folder'; parent: KBFolder | null }
+  | { type: 'create-folder'; parent: KBFolder | null; isSubFolder: boolean }
   | { type: 'rename-folder'; folder: KBFolder }
   | { type: 'archive-folder'; folder: KBFolder }
   | { type: 'change-folder-visibility'; folder: KBFolder };
@@ -90,7 +90,7 @@ export function AppShell() {
   const handleFolderAction = useCallback((action: FolderAction, folder: KBFolder) => {
     switch (action) {
       case 'create-sub':
-        setDialog({ type: 'create-folder', parent: folder });
+        setDialog({ type: 'create-folder', parent: folder, isSubFolder: true });
         break;
       case 'rename':
         setDialog({ type: 'rename-folder', folder });
@@ -108,7 +108,11 @@ export function AppShell() {
   }, []);
 
   const handleCreateRootFolder = useCallback(() => {
-    setDialog({ type: 'create-folder', parent: null });
+    setDialog({ type: 'create-folder', parent: null, isSubFolder: false });
+  }, []);
+
+  const handleCreateSubFolder = useCallback((parent: KBFolder | null) => {
+    setDialog({ type: 'create-folder', parent, isSubFolder: true });
   }, []);
 
   const handleCreateFolderConfirm = useCallback(
@@ -182,6 +186,7 @@ export function AppShell() {
           onArticleClick={(article) => setModal({ type: 'view', article })}
           onCreateArticle={(folderId) => setModal({ type: 'create', folderId })}
           onCreateFolder={handleCreateRootFolder}
+          onCreateSubFolder={handleCreateSubFolder}
           onFolderAction={handleFolderAction}
         />
       </div>
@@ -231,8 +236,8 @@ export function AppShell() {
 
       {/* Folder dialogs */}
       {dialog.type === 'create-folder' && (() => {
-        const parent = dialog.parent;
-        if (!parent) {
+        // Root creation: no parent picker.
+        if (!dialog.isSubFolder) {
           return (
             <CreateFolderDialog
               mode="create"
@@ -241,11 +246,16 @@ export function AppShell() {
             />
           );
         }
-        const eligibleParents = getEligibleParentFolders(parent.unitId);
-        // Make sure the initial parent is in the list (it always should be).
+        // Sub-folder creation: always show picker (parent may be null when
+        // user clicked "Create sub-folder" from the + menu without a folder
+        // selected; the dropdown then defaults to the first eligible folder).
+        const ownerUnitId = dialog.parent?.unitId ?? selectedUnitId;
+        const eligibleParents = getEligibleParentFolders(ownerUnitId);
         const options = eligibleParents.map((f) => ({ id: f.id, label: f.name }));
         const initialId =
-          options.find((o) => o.id === parent.id)?.id ?? options[0]?.id ?? '';
+          (dialog.parent && options.find((o) => o.id === dialog.parent!.id)?.id) ??
+          options[0]?.id ??
+          '';
         return (
           <CreateFolderDialog
             mode="create"

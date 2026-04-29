@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   List,
   BookOpen,
+  Plus,
 } from 'lucide-react';
 import type { KBArticle, KBFolder } from '@/types';
 import {
@@ -27,6 +28,7 @@ interface KBRootProps {
   onArticleClick?: (article: KBArticle) => void;
   onCreateArticle?: (folderId: string) => void;
   onCreateFolder?: () => void;
+  onCreateSubFolder?: (parent: KBFolder | null) => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
 }
 
@@ -35,6 +37,7 @@ export function KBRoot({
   onArticleClick,
   onCreateArticle,
   onCreateFolder,
+  onCreateSubFolder,
   onFolderAction,
 }: KBRootProps) {
   // Archived items are visible by default; the filter popover lets users hide them.
@@ -108,6 +111,14 @@ export function KBRoot({
   ]);
 
   const hasAnyContent = ownFolders.length > 0 || sharedFolders.length > 0;
+
+  // "Create article" is only relevant when a writeable own folder is selected.
+  const selectedFolder = selectedFolderId ? getFolder(selectedFolderId) : null;
+  const canCreateArticle =
+    view === 'folder' &&
+    !!selectedFolder &&
+    selectedFolder.unitId === unitId &&
+    selectedFolder.status === 'active';
 
   const toolbar = (
     <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#edeff3] shrink-0">
@@ -224,6 +235,17 @@ export function KBRoot({
             <List className="w-4 h-4 text-[#1f242e]" />
           </button>
         </div>
+
+        {canCreateArticle && (
+          <button
+            type="button"
+            onClick={() => onCreateArticle?.(selectedFolderId!)}
+            className="flex items-center gap-1.5 h-7 px-2 text-[13px] font-medium text-white bg-[#006bd6] rounded-lg hover:bg-[#0052a3]"
+          >
+            <Plus className="w-4 h-4" />
+            Create article
+          </button>
+        )}
       </div>
     </div>
   );
@@ -240,6 +262,7 @@ export function KBRoot({
         allArticlesCount={allArticlesCount}
         onSelectAllArticles={handleSelectAllArticles}
         onCreateRootFolder={onCreateFolder}
+        onCreateSubFolder={onCreateSubFolder}
         onFolderAction={onFolderAction}
       />
 
