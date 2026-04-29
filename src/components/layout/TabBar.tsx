@@ -1,5 +1,6 @@
-import { Users, UserCog, Megaphone, Briefcase, BookOpen } from 'lucide-react';
+import { Users, UserCog, Megaphone, Briefcase, BookOpen, RotateCcw } from 'lucide-react';
 import type { AppTab } from '@/types';
+import { resetKbState } from '@/data/mock-data';
 
 const tabs: { id: AppTab; label: string; icon: React.ElementType }[] = [
   { id: 'team', label: 'Team', icon: Users },
@@ -34,6 +35,22 @@ export function TabBar({ activeTab }: TabBarProps) {
           </button>
         );
       })}
+
+      <div className="ml-auto pb-1">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Reset KB to demo defaults? Local changes will be lost.')) {
+              resetKbState();
+            }
+          }}
+          className="flex items-center gap-1.5 h-7 px-2 text-[12px] text-[#697a9b] rounded-lg hover:bg-[#fafbfc] hover:text-[#1f242e]"
+          title="Reset to defaults (clears localStorage)"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Reset demo
+        </button>
+      </div>
     </div>
   );
 }

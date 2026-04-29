@@ -11,6 +11,7 @@ import {
   Archive,
   Eye,
   RotateCcw,
+  Files,
 } from 'lucide-react';
 import type { KBFolder } from '@/types';
 import {
@@ -38,6 +39,9 @@ interface FolderTreeProps {
   onSelectFolder: (folderId: string) => void;
   showArchived: boolean;
   showSubUnits: boolean;
+  isAllArticlesActive: boolean;
+  allArticlesCount: number;
+  onSelectAllArticles: () => void;
   onCreateRootFolder?: () => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
 }
@@ -362,6 +366,9 @@ export function FolderTree({
   onSelectFolder,
   showArchived,
   showSubUnits,
+  isAllArticlesActive,
+  allArticlesCount,
+  onSelectAllArticles,
   onCreateRootFolder,
   onFolderAction,
 }: FolderTreeProps) {
@@ -388,6 +395,33 @@ export function FolderTree({
 
   return (
     <aside className="w-[260px] shrink-0 border-r border-[#edeff3] bg-white flex flex-col h-full overflow-hidden">
+      {/* All articles pseudo-entry — height matches the right-column search toolbar */}
+      <div className="px-1.5 py-2">
+        <button
+          type="button"
+          onClick={onSelectAllArticles}
+          className={`flex items-center gap-1.5 w-full h-7 pl-2 pr-2 rounded-md select-none transition-colors ${
+            isAllArticlesActive
+              ? 'bg-[#ebf5ff] text-[#0052a3]'
+              : 'text-[#1f242e] hover:bg-[#fafbfc]'
+          }`}
+        >
+          <Files
+            className={`w-4 h-4 shrink-0 ${
+              isAllArticlesActive ? 'text-[#006bd6]' : 'text-[#697a9b]'
+            }`}
+          />
+          <span className="text-[13px] flex-1 text-left">All articles</span>
+          {allArticlesCount > 0 && (
+            <span className="text-[11px] text-[#697a9b] tabular-nums shrink-0">
+              {allArticlesCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div className="border-t border-[#edeff3]" />
+
       {/* Own folders section */}
       <div className="flex flex-col min-h-0">
         <div className="flex items-center justify-between px-3 pt-3 pb-1.5">

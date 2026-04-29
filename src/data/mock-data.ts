@@ -794,6 +794,65 @@ export function getFolderDepth(folderId: string): number {
   return getFolderPath(folderId).length;
 }
 
+/** Flat list of every article visible to a viewing unit, across all reachable
+ *  folders. Used by the "All articles" view. Respects the same lens rules as
+ *  the per-folder views, plus optional includeSubUnits to mirror the toolbar
+ *  toggle. Default sort: updatedAt desc. */
+export function getAllVisibleArticles(
+  viewingUnitId: string,
+  opts?: {
+    includeArchived?: boolean;
+    includeSubUnits?: boolean;
+    search?: string;
+  }
+): KBArticle[] {
+  const folderIds = new Set<string>();
+
+  const collectTree = (rootId: string, includeArchivedFolders: boolean) => {
+    folderIds.add(rootId);
+    getChildFolders(rootId, { includeArchived: includeArchivedFolders }).forEach((c) =>
+      collectTree(c.id, includeArchivedFolders)
+    );
+  };
+
+  // Own folders (archived included if asked)
+  const ownRoots = getOwnRootFolders(viewingUnitId, {
+    includeArchived: !!opts?.includeArchived,
+  });
+  ownRoots.forEach((f) => collectTree(f.id, !!opts?.includeArchived));
+
+  // Shared roots (only active — archived sharing not exposed to other units)
+  getSharedRootFolders(viewingUnitId).forEach((f) => collectTree(f.id, false));
+
+  // Sub-unit roots (mirrors the sidebar toggle)
+  if (opts?.includeSubUnits) {
+    getSubUnitRootFolders(viewingUnitId).forEach((f) => collectTree(f.id, false));
+  }
+
+  const seen = new Set<string>();
+  const out: KBArticle[] = [];
+  for (const fid of folderIds) {
+    const articles = getArticlesInFolder(fid, viewingUnitId, {
+      includeArchived: !!opts?.includeArchived,
+    });
+    for (const a of articles) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      out.push(a);
+    }
+  }
+
+  let result = out;
+  const q = opts?.search?.trim().toLowerCase();
+  if (q) {
+    result = out.filter((a) => a.title.toLowerCase().includes(q));
+  }
+  result.sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+  return result;
+}
+
 /** Folders that can serve as a parent for a NEW sub-folder in the given unit:
  *  must be own + active + at depth < 2 (so the child won't exceed max depth). */
 export function getEligibleParentFolders(unitId: string): KBFolder[] {

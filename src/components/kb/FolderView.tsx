@@ -184,26 +184,27 @@ export function FolderView({
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
       {/* Folder breadcrumb + header */}
-      <div className="px-6 pt-5 pb-4 border-b border-[#edeff3] shrink-0">
-        <div className="flex items-center gap-1.5 text-[12px] text-[#697a9b] mb-2">
-          <span>Knowledge base</span>
-          {path.map((p, idx) => (
-            <span key={p.id} className="flex items-center gap-1.5">
-              <ChevronRight className="w-3 h-3" />
-              {idx === path.length - 1 ? (
-                <span className="text-[#1f242e]">{p.name}</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onSelectFolder(p.id)}
-                  className="hover:text-[#1f242e]"
-                >
-                  {p.name}
-                </button>
-              )}
-            </span>
-          ))}
-        </div>
+      <div className="px-4 py-4 border-b border-[#edeff3] shrink-0">
+        {path.length > 1 && (
+          <div className="flex items-center gap-1.5 text-[12px] text-[#697a9b] mb-2">
+            {path.map((p, idx) => (
+              <span key={p.id} className="flex items-center gap-1.5">
+                {idx > 0 && <ChevronRight className="w-3 h-3" />}
+                {idx === path.length - 1 ? (
+                  <span className="text-[#1f242e]">{p.name}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onSelectFolder(p.id)}
+                    className="hover:text-[#1f242e]"
+                  >
+                    {p.name}
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex items-start gap-3">
           <div
@@ -317,12 +318,9 @@ export function FolderView({
             }
           />
         ) : (
-          <div className="px-6 py-4 flex flex-col gap-5">
+          <>
             {subFolders.length > 0 && (
-              <section className="flex flex-col gap-2">
-                <h2 className="text-[12px] font-medium uppercase tracking-wide text-[#697a9b]">
-                  Sub-folders
-                </h2>
+              <section className="px-4 py-4 border-b border-[#edeff3]">
                 <div className="grid grid-cols-2 gap-2">
                   {subFolders.map((sf) => (
                     <SubFolderCard
@@ -337,58 +335,51 @@ export function FolderView({
             )}
 
             {articles.length > 0 && (
-              <section className="flex flex-col gap-2">
-                <h2 className="text-[12px] font-medium uppercase tracking-wide text-[#697a9b]">
-                  Articles
-                </h2>
-                {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-3 gap-3">
+              viewMode === 'grid' ? (
+                <div className="grid grid-cols-3 gap-3 px-4 pt-4 pb-6">
+                  {articles.map((article) => (
+                    <ArticleCard
+                      key={article.id}
+                      article={article}
+                      onClick={() => onArticleClick?.(article)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <table className="w-full table-fixed">
+                  <thead>
+                    <tr className="border-y border-[#edeff3] bg-[#fafbfc]">
+                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pl-4 pr-4">
+                        Article
+                      </th>
+                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[140px]">
+                        Unit
+                      </th>
+                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
+                        Status
+                      </th>
+                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
+                        Updated
+                      </th>
+                      <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[180px]">
+                        Owner
+                      </th>
+                      <th className="w-[44px] py-2 pr-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {articles.map((article) => (
-                      <ArticleCard
+                      <ArticleRow
                         key={article.id}
                         article={article}
                         onClick={() => onArticleClick?.(article)}
                       />
                     ))}
-                  </div>
-                ) : (
-                  <div className="border border-[#edeff3] rounded-lg overflow-hidden bg-white">
-                    <table className="w-full table-fixed">
-                      <thead>
-                        <tr className="border-b border-[#edeff3] bg-[#fafbfc]">
-                          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pl-4 pr-4">
-                            Article
-                          </th>
-                          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[140px]">
-                            Unit
-                          </th>
-                          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
-                            Status
-                          </th>
-                          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
-                            Updated
-                          </th>
-                          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[180px]">
-                            Owner
-                          </th>
-                          <th className="w-[44px] py-2 pr-2"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {articles.map((article) => (
-                          <ArticleRow
-                            key={article.id}
-                            article={article}
-                            onClick={() => onArticleClick?.(article)}
-                          />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
+                  </tbody>
+                </table>
+              )
             )}
-          </div>
+          </>
         )}
       </div>
     </div>
