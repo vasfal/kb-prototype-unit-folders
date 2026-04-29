@@ -20,13 +20,9 @@ import {
   Heading2,
   Undo,
   Redo,
-  ChevronDown,
-  Eye,
-  Lock,
-  Building2,
 } from 'lucide-react';
-import type { KBArticle, Visibility } from '@/types';
-import { getOwnRootFolders, getChildFolders, contacts } from '@/data/mock-data';
+import type { KBArticle } from '@/types';
+import { getOwnRootFolders, getChildFolders, getFolder, contacts } from '@/data/mock-data';
 import { EntityModal } from '../shared/EntityModal';
 
 interface ArticleEditorProps {
@@ -36,11 +32,6 @@ interface ArticleEditorProps {
   onSave: (article: KBArticle) => void;
   onClose: () => void;
 }
-
-const visibilityOptions: { value: Visibility; label: string; icon: React.ReactNode }[] = [
-  { value: 'unit_and_subunits', label: 'Unit & sub-units', icon: <Building2 className="w-4 h-4" /> },
-  { value: 'current_unit_only', label: 'Current unit only', icon: <Lock className="w-4 h-4" /> },
-];
 
 function ToolbarButton({ active, onClick, children, title }: { active?: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
   return (
@@ -213,8 +204,6 @@ export function ArticleEditor({ article, unitId, initialFolderId, onSave, onClos
   const [folderId, setFolderId] = useState(
     article?.folderId ?? initialFolderId ?? folderOptions[0]?.id ?? ''
   );
-  const [visibility, setVisibility] = useState<Visibility>(article?.visibility ?? 'unit_and_subunits');
-  const [visibilityOpen, setVisibilityOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -236,6 +225,8 @@ export function ArticleEditor({ article, unitId, initialFolderId, onSave, onClos
 
   const handleSave = useCallback((status: 'draft' | 'published') => {
     const now = new Date().toISOString();
+    // Visibility is owned by the parent folder; the article inherits it.
+    const folder = getFolder(folderId);
     const saved: KBArticle = {
       id: article?.id ?? `a-new-${Date.now()}`,
       folderId,
@@ -243,7 +234,7 @@ export function ArticleEditor({ article, unitId, initialFolderId, onSave, onClos
       title,
       content: editor?.getHTML() ?? '',
       status,
-      visibility,
+      visibility: folder?.visibility ?? 'unit_and_subunits',
       owner: article?.owner ?? contacts.oleksii,
       createdBy: article?.createdBy ?? contacts.oleksii,
       createdAt: article?.createdAt ?? now,
@@ -252,17 +243,14 @@ export function ArticleEditor({ article, unitId, initialFolderId, onSave, onClos
       publishedAt: status === 'published' ? now : article?.publishedAt ?? null,
     };
     onSave(saved);
-  }, [article, folderId, unitId, title, editor, visibility, onSave]);
-
-  const selectedVisibility = visibilityOptions.find((v) => v.value === visibility)!;
+  }, [article, folderId, unitId, title, editor, onSave]);
 
   return (
     <EntityModal title={isNew ? 'New article' : 'Edit article'} onClose={onClose}>
       <div className="flex flex-col h-full">
-        {/* Top bar: category selector + visibility + action buttons */}
+        {/* Top bar: folder selector + action buttons */}
         <div className="flex items-center justify-between px-6 py-2.5 border-b border-[#edeff3] shrink-0">
           <div className="flex items-center gap-3">
-            {/* Folder selector */}
             <div className="flex items-center gap-1.5">
               <span className="text-[13px] text-[#697a9b]">Folder</span>
               <select
@@ -274,34 +262,6 @@ export function ArticleEditor({ article, unitId, initialFolderId, onSave, onClos
                   <option key={f.id} value={f.id}>{f.label}</option>
                 ))}
               </select>
-            </div>
-
-            {/* Visibility selector */}
-            <div className="relative">
-              <button
-                onClick={() => setVisibilityOpen((p) => !p)}
-                className="flex items-center gap-1.5 h-7 px-2 text-[13px] border border-[#e0e4eb] rounded-lg bg-white text-[#1f242e] hover:bg-[#fafbfc]"
-              >
-                <Eye className="w-3.5 h-3.5 text-[#697a9b]" />
-                {selectedVisibility.label}
-                <ChevronDown className="w-3.5 h-3.5 text-[#697a9b]" />
-              </button>
-              {visibilityOpen && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] z-10 py-1 min-w-[180px]">
-                  {visibilityOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => { setVisibility(opt.value); setVisibilityOpen(false); }}
-                      className={`flex items-center gap-2 w-full px-3 py-1.5 text-[13px] text-left hover:bg-[#fafbfc] ${
-                        visibility === opt.value ? 'text-[#006bd6]' : 'text-[#1f242e]'
-                      }`}
-                    >
-                      <span className="text-[#697a9b]">{opt.icon}</span>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 

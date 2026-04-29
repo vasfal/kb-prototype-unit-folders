@@ -108,7 +108,7 @@ function SummaryFields({ article }: { article: KBArticle }) {
             <span>{article.owner.name}</span>
           </div>
         </SummaryField>
-        <SummaryField icon={<Tag className="w-4 h-4" />} label="Category">
+        <SummaryField icon={<Tag className="w-4 h-4" />} label="Folder">
           {folder?.name ?? '—'}
         </SummaryField>
       </div>
@@ -204,15 +204,24 @@ function RightPanelContent({ article, onClose }: { article: KBArticle; onClose: 
               {statusLabelMap[article.status]}
             </span>
           </PropertyRow>
-          <PropertyRow icon={<Tag className="w-4 h-4" />} label="Category">
+          <PropertyRow icon={<Tag className="w-4 h-4" />} label="Folder">
             {folder?.name ?? '—'}
           </PropertyRow>
           <PropertyRow icon={<Building2 className="w-4 h-4" />} label="Unit">
             {unit?.name ?? '—'}
           </PropertyRow>
           <PropertyRow icon={<Eye className="w-4 h-4" />} label="Visibility">
-            <VisibilityBadge visibility={article.visibility} />
-            {article.visibility === 'unit_and_subunits' && 'Unit & sub-units'}
+            {folder ? (
+              <>
+                <VisibilityBadge visibility={folder.visibility} />
+                {folder.visibility === 'unit_and_subunits' && 'Unit & sub-units'}
+                <span className="block text-[11px] text-[#697a9b] mt-0.5">
+                  Inherited from folder
+                </span>
+              </>
+            ) : (
+              '—'
+            )}
           </PropertyRow>
           <PropertyRow icon={<User className="w-4 h-4" />} label="Owner">
             <div className="flex items-center gap-1.5">
