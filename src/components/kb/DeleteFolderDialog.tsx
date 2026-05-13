@@ -1,14 +1,14 @@
-import { Archive } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { KBFolder } from '@/types';
 import { getFolderImpact } from '@/data/mock-data';
 
-interface ArchiveFolderDialogProps {
+interface DeleteFolderDialogProps {
   folder: KBFolder;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export function ArchiveFolderDialog({ folder, onConfirm, onCancel }: ArchiveFolderDialogProps) {
+export function DeleteFolderDialog({ folder, onConfirm, onCancel }: DeleteFolderDialogProps) {
   const { articles, subFolders } = getFolderImpact(folder.id);
 
   return (
@@ -16,17 +16,17 @@ export function ArchiveFolderDialog({ folder, onConfirm, onCancel }: ArchiveFold
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
       <div className="relative bg-white rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] w-[440px] overflow-hidden">
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-          <div className="w-9 h-9 rounded-lg bg-[#fef3c7] flex items-center justify-center shrink-0">
-            <Archive className="w-4.5 h-4.5 text-[#d97706]" />
+          <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+            <Trash2 className="w-[18px] h-[18px] text-red-600" />
           </div>
           <h3 className="text-[16px] font-medium text-[#1f242e] leading-[24px]">
-            Archive folder
+            Delete folder
           </h3>
         </div>
 
         <div className="px-5 pb-4">
           <p className="text-[14px] text-[#3d475c] leading-[20px] mb-2">
-            Archiving <span className="font-medium text-[#1f242e]">"{folder.name}"</span> will also archive everything inside it.
+            Permanently delete <span className="font-medium text-[#1f242e]">"{folder.name}"</span> and everything inside it.
           </p>
           {(articles > 0 || subFolders > 0) && (
             <p className="text-[13px] text-[#697a9b] leading-[20px] mb-2">
@@ -42,11 +42,11 @@ export function ArchiveFolderDialog({ folder, onConfirm, onCancel }: ArchiveFold
                   </span>
                 </>
               )}
-              .
+              . All of them will be deleted.
             </p>
           )}
-          <p className="text-[13px] text-[#697a9b] leading-[20px]">
-            You can restore archived items later.
+          <p className="text-[13px] text-red-600 leading-[20px]">
+            This action cannot be undone.
           </p>
         </div>
 
@@ -61,9 +61,9 @@ export function ArchiveFolderDialog({ folder, onConfirm, onCancel }: ArchiveFold
           <button
             type="button"
             onClick={onConfirm}
-            className="h-8 px-3 text-[14px] font-medium text-white bg-[#d97706] rounded-lg hover:bg-[#b45309]"
+            className="h-8 px-3 text-[14px] font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
           >
-            Archive
+            Delete
           </button>
         </div>
       </div>

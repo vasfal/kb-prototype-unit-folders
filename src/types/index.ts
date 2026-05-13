@@ -29,13 +29,15 @@ export interface BusinessUnit {
   children?: BusinessUnit[];
 }
 
-/** Folders are owned by a single unit. Each unit maintains its own independent folder tree. */
+/** Folders are owned by a single unit. Each unit maintains its own independent folder tree.
+ *  `color` is meaningful only on root (level-1) folders; sub-folders inherit
+ *  their root ancestor's color at render time via `getFolderDisplayStyle`. */
 export interface KBFolder {
   id: string;
   unitId: string; // owning unit
   parentFolderId: string | null; // null = top-level folder within the owning unit
   name: string;
-  color: string; // hex color for the folder icon
+  color: string; // hex color — set on root, copied to sub-folders on create
   visibility: Visibility;
   status: FolderStatus;
   sortOrder: number;

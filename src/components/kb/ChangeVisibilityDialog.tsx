@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, Lock } from 'lucide-react';
+import { Globe2, Lock } from 'lucide-react';
 import type { KBFolder, Visibility } from '@/types';
 
 interface ChangeVisibilityDialogProps {
@@ -11,14 +11,14 @@ interface ChangeVisibilityDialogProps {
 const options: { value: Visibility; label: string; description: string; icon: React.ReactNode }[] = [
   {
     value: 'unit_and_subunits',
-    label: 'Unit & sub-units',
-    description: 'Visible to this unit and all its sub-units.',
-    icon: <Building2 className="w-4 h-4" />,
+    label: 'Public',
+    description: 'Shared with this unit and all sub-units. Parent units can browse it through "Show sub-units".',
+    icon: <Globe2 className="w-4 h-4" />,
   },
   {
     value: 'current_unit_only',
-    label: 'Current unit only',
-    description: 'Visible only to this unit. Sub-units cannot see it.',
+    label: 'Private',
+    description: 'Only people in this unit can see it. Parent and sub-units have no access, even with "Show sub-units" on.',
     icon: <Lock className="w-4 h-4" />,
   },
 ];

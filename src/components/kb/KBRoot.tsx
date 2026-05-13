@@ -11,8 +11,8 @@ import type { KBArticle, KBFolder } from '@/types';
 import {
   getOwnRootFolders,
   getSharedRootFolders,
-  getAllVisibleArticles,
   getFolder,
+  getFolderPath,
   getDescendantUnitIds,
 } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
@@ -54,14 +54,6 @@ export function KBRoot({
   const version = useFolderVersion();
   const ownFolders = useMemo(() => getOwnRootFolders(unitId), [unitId, version]);
   const sharedFolders = useMemo(() => getSharedRootFolders(unitId), [unitId, version]);
-  const allArticlesCount = useMemo(
-    () =>
-      getAllVisibleArticles(unitId, {
-        includeArchived: showArchived,
-        includeSubUnits: showSubUnits,
-      }).length,
-    [unitId, showArchived, showSubUnits, version]
-  );
 
   const handleSelectFolder = (folderId: string) => {
     setSelectedFolderId(folderId);
@@ -87,17 +79,18 @@ export function KBRoot({
   }, [filterOpen]);
 
   // When the unit / folder list / toggles change, clear selection if the current
-  // folder is no longer visible (archived selection is OK while showArchived is on;
-  // sub-unit selection is OK while showSubUnits is on).
+  // folder is no longer reachable. Reachability is checked against the folder's
+  // root ancestor — a sub-folder of a shared/sub-unit root is still valid.
   useEffect(() => {
     const current = selectedFolderId ? getFolder(selectedFolderId) : undefined;
     if (current) {
+      const rootId = getFolderPath(current.id)[0]?.id;
       const isOwn = current.unitId === unitId;
-      const isShared = sharedFolders.some((f) => f.id === current.id);
+      const isSharedRoot = !!rootId && sharedFolders.some((f) => f.id === rootId);
       const isSubUnit =
         showSubUnits && getDescendantUnitIds(unitId).has(current.unitId);
       const archivedOk = showArchived || current.status === 'active';
-      if ((isOwn || isShared || isSubUnit) && archivedOk) return;
+      if ((isOwn || isSharedRoot || isSubUnit) && archivedOk) return;
     }
     setSelectedFolderId(ownFolders[0]?.id ?? sharedFolders[0]?.id ?? null);
   }, [
@@ -259,7 +252,6 @@ export function KBRoot({
         showArchived={showArchived}
         showSubUnits={showSubUnits}
         isAllArticlesActive={view === 'all-articles'}
-        allArticlesCount={allArticlesCount}
         onSelectAllArticles={handleSelectAllArticles}
         onCreateRootFolder={onCreateFolder}
         onCreateSubFolder={onCreateSubFolder}

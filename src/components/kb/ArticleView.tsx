@@ -14,6 +14,7 @@ import {
   FolderInput,
   EyeOff,
   Send,
+  Trash2,
 } from 'lucide-react';
 import type { KBArticle, ArticleStatus } from '@/types';
 import { getUnit, getFolder } from '@/data/mock-data';
@@ -26,6 +27,7 @@ interface ArticleViewProps {
   onEdit?: () => void;
   onStatusChange?: (article: KBArticle, status: ArticleStatus) => void;
   onMove?: (article: KBArticle) => void;
+  onDelete?: (article: KBArticle) => void;
 }
 
 const statusColorMap: Record<string, string> = {
@@ -121,11 +123,13 @@ function ActionsMenu({
   onClose,
   onStatusChange,
   onMove,
+  onDelete,
 }: {
   article: KBArticle;
   onClose: () => void;
   onStatusChange?: (status: ArticleStatus) => void;
   onMove?: () => void;
+  onDelete?: () => void;
 }) {
   const items: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }[] = [];
 
@@ -153,7 +157,6 @@ function ActionsMenu({
       icon: <Archive className="w-4 h-4" />,
       label: 'Archive',
       onClick: () => { onStatusChange?.('archived'); onClose(); },
-      danger: true,
     });
   }
   if (article.status === 'archived') {
@@ -163,6 +166,12 @@ function ActionsMenu({
       onClick: () => { onStatusChange?.('draft'); onClose(); },
     });
   }
+  items.push({
+    icon: <Trash2 className="w-4 h-4" />,
+    label: 'Delete',
+    onClick: () => { onDelete?.(); onClose(); },
+    danger: true,
+  });
 
   return (
     <>
@@ -173,10 +182,10 @@ function ActionsMenu({
             key={item.label}
             onClick={item.onClick}
             className={`flex items-center gap-2 w-full px-3 py-1.5 text-[13px] text-left hover:bg-[#fafbfc] ${
-              item.danger ? 'text-[#d97706]' : 'text-[#1f242e]'
+              item.danger ? 'text-red-600' : 'text-[#1f242e]'
             }`}
           >
-            <span className={item.danger ? 'text-[#d97706]' : 'text-[#697a9b]'}>{item.icon}</span>
+            <span className={item.danger ? 'text-red-600' : 'text-[#697a9b]'}>{item.icon}</span>
             {item.label}
           </button>
         ))}
@@ -214,7 +223,7 @@ function RightPanelContent({ article, onClose }: { article: KBArticle; onClose: 
             {folder ? (
               <>
                 <VisibilityBadge visibility={folder.visibility} />
-                {folder.visibility === 'unit_and_subunits' && 'Unit & sub-units'}
+                {folder.visibility === 'unit_and_subunits' && 'Public'}
                 <span className="block text-[11px] text-[#697a9b] mt-0.5">
                   Inherited from folder
                 </span>
@@ -264,7 +273,7 @@ function PropertyRow({ icon, label, children }: { icon: React.ReactNode; label: 
   );
 }
 
-export function ArticleView({ article, onClose, onEdit, onStatusChange, onMove }: ArticleViewProps) {
+export function ArticleView({ article, onClose, onEdit, onStatusChange, onMove, onDelete }: ArticleViewProps) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -308,6 +317,7 @@ export function ArticleView({ article, onClose, onEdit, onStatusChange, onMove }
                   onClose={() => setMenuOpen(false)}
                   onStatusChange={(status) => onStatusChange?.(article, status)}
                   onMove={() => onMove?.(article)}
+                  onDelete={() => onDelete?.(article)}
                 />
               )}
             </div>

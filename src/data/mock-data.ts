@@ -262,6 +262,21 @@ export const allFolders: KBFolder[] = [
     updatedAt: '2026-03-27T14:00:00Z',
   },
   {
+    id: 'f-em-onboarding-eng-mac',
+    unitId: 'employo',
+    parentFolderId: 'f-em-onboarding-eng',
+    name: 'macOS toolbox',
+    color: '#ff9124',
+    visibility: 'unit_and_subunits',
+    status: 'active',
+    sortOrder: 0,
+    owner: contacts.mykola,
+    createdBy: contacts.mykola,
+    createdAt: '2026-01-20T10:00:00Z',
+    updatedBy: contacts.mykola,
+    updatedAt: '2026-03-12T14:00:00Z',
+  },
+  {
     id: 'f-em-onboarding-design',
     unitId: 'employo',
     parentFolderId: 'f-em-onboarding',
@@ -305,6 +320,21 @@ export const allFolders: KBFolder[] = [
     createdAt: '2026-01-05T10:00:00Z',
     updatedBy: contacts.mykola,
     updatedAt: '2026-03-23T10:00:00Z',
+  },
+  {
+    id: 'f-em-hr-internal',
+    unitId: 'employo',
+    parentFolderId: null,
+    name: 'HR — internal',
+    color: '#0891b2',
+    visibility: 'current_unit_only',
+    status: 'active',
+    sortOrder: 3,
+    owner: contacts.yuliana,
+    createdBy: contacts.yuliana,
+    createdAt: '2026-02-01T10:00:00Z',
+    updatedBy: contacts.yuliana,
+    updatedAt: '2026-03-20T10:00:00Z',
   },
 ];
 
@@ -390,6 +420,23 @@ export const allArticles: KBArticle[] = [
     updatedBy: contacts.dmytro,
     updatedAt: '2026-03-29T16:00:00Z',
     publishedAt: null,
+  },
+
+  // ── Employo > Employo onboarding > Engineering setup > macOS toolbox (level-3) ──
+  {
+    id: 'a-mac-1',
+    folderId: 'f-em-onboarding-eng-mac',
+    unitId: 'employo',
+    title: 'Recommended Homebrew formulae',
+    content: `<h2>Core toolchain</h2><p>Install via <code>brew bundle</code> using the team's <code>Brewfile</code>. Includes:</p><ul><li><strong>git</strong>, <strong>gh</strong>, <strong>git-lfs</strong> — source control</li><li><strong>node</strong> (managed via fnm), <strong>pnpm</strong>, <strong>jq</strong>, <strong>yq</strong></li><li><strong>docker</strong>, <strong>colima</strong> — local containers</li></ul><h2>Editor tools</h2><p>Optional but useful: <strong>fd</strong>, <strong>ripgrep</strong>, <strong>bat</strong>, <strong>eza</strong>, <strong>zoxide</strong>.</p>`,
+    status: 'published',
+    visibility: 'unit_and_subunits',
+    owner: contacts.mykola,
+    createdBy: contacts.mykola,
+    createdAt: '2026-01-22T10:00:00Z',
+    updatedBy: contacts.mykola,
+    updatedAt: '2026-03-12T14:00:00Z',
+    publishedAt: '2026-01-23T10:00:00Z',
   },
 
   // ── Employo > Employo onboarding > Design team setup ──
@@ -485,6 +532,38 @@ export const allArticles: KBArticle[] = [
     createdAt: '2026-03-26T10:00:00Z',
     updatedBy: contacts.mykola,
     updatedAt: '2026-03-28T15:00:00Z',
+    publishedAt: null,
+  },
+
+  // ── Employo > HR — internal (current_unit_only) ──
+  {
+    id: 'a-hr-1',
+    folderId: 'f-em-hr-internal',
+    unitId: 'employo',
+    title: 'Investigation procedure (HR-only)',
+    content: `<h2>Scope</h2><p>Internal procedure for HR-led investigations. Visible only inside Employo — not to Develux or any other unit, even with "Show sub-units" enabled.</p><h2>Steps</h2><ol><li>Receive and log the report.</li><li>Initial confidential interview with the reporter.</li><li>Cross-reference policies and prior incidents.</li><li>Draft a confidential summary for HR leadership.</li></ol>`,
+    status: 'published',
+    visibility: 'current_unit_only',
+    owner: contacts.yuliana,
+    createdBy: contacts.yuliana,
+    createdAt: '2026-02-10T10:00:00Z',
+    updatedBy: contacts.yuliana,
+    updatedAt: '2026-03-20T10:00:00Z',
+    publishedAt: '2026-02-11T10:00:00Z',
+  },
+  {
+    id: 'a-hr-2',
+    folderId: 'f-em-hr-internal',
+    unitId: 'employo',
+    title: 'Compensation review — internal notes',
+    content: `<h2>Process</h2><p>HR-internal notes on compensation review cycles. Not for sharing outside Employo.</p>`,
+    status: 'draft',
+    visibility: 'current_unit_only',
+    owner: contacts.yuliana,
+    createdBy: contacts.yuliana,
+    createdAt: '2026-03-01T10:00:00Z',
+    updatedBy: contacts.yuliana,
+    updatedAt: '2026-03-18T10:00:00Z',
     publishedAt: null,
   },
 
@@ -692,8 +771,9 @@ export function getSharedRootFolders(viewingUnitId: string): KBFolder[] {
 }
 
 /** Top-level folders owned by descendant units of viewingUnitId — used by the
- *  "Show sub-units" toggle so a parent admin can browse downward. Returns active
- *  folders only; visibility is intentionally bypassed (parent-admin view). */
+ *  "Show sub-units" toggle so a parent admin can browse downward.
+ *  `current_unit_only` folders are intentionally hidden: a sub-unit's "Current
+ *  unit" visibility is strict and parents cannot see them even with the toggle. */
 export function getSubUnitRootFolders(viewingUnitId: string): KBFolder[] {
   const descendants = getDescendantUnitIds(viewingUnitId);
   return allFolders
@@ -701,7 +781,8 @@ export function getSubUnitRootFolders(viewingUnitId: string): KBFolder[] {
       (f) =>
         descendants.has(f.unitId) &&
         f.parentFolderId === null &&
-        f.status === 'active'
+        f.status === 'active' &&
+        f.visibility === 'unit_and_subunits'
     )
     .sort((a, b) => {
       const u = a.unitId.localeCompare(b.unitId);
@@ -746,7 +827,8 @@ export function getArticlesInFolder(
         return true;
       }
       if (isSubUnit) {
-        return a.status === 'published';
+        // Parent viewing child via sub-units toggle: strict — current_unit_only stays hidden.
+        return a.status === 'published' && a.visibility === 'unit_and_subunits';
       }
       if (a.status !== 'published') return false;
       return articleVisibleToUnit(a, viewingUnitId);
@@ -767,7 +849,7 @@ export function getArticleCount(folderId: string, viewingUnitId: string): number
   const direct = allArticles.filter((a) => {
     if (a.folderId !== folderId) return false;
     if (isOwn) return a.status !== 'archived';
-    if (isSubUnit) return a.status === 'published';
+    if (isSubUnit) return a.status === 'published' && a.visibility === 'unit_and_subunits';
     return a.status === 'published' && articleVisibleToUnit(a, viewingUnitId);
   }).length;
 
@@ -789,9 +871,26 @@ export function getFolderPath(folderId: string): KBFolder[] {
   return path;
 }
 
-/** Folder depth: top-level = 1, sub-folder = 2. PRD §3.3 caps at 2. */
+/** Folder depth: top-level = 1, sub-folder = 2, sub-sub-folder = 3.
+ *  Capped at 3 per D-2026-05-12-02 in docs/DECISIONS.md (was 2 in PRD §3.3). */
 export function getFolderDepth(folderId: string): number {
   return getFolderPath(folderId).length;
+}
+
+/** Walks up to the root (level-1) ancestor. Returns undefined if the folder is
+ *  missing entirely; returns the folder itself if it is already a root. */
+export function getRootFolder(folderId: string): KBFolder | undefined {
+  const path = getFolderPath(folderId);
+  return path[0];
+}
+
+/** Display style (color) inherited from the root ancestor. Sub-folders always
+ *  render with their root's color — sub-folder's own `color` field is ignored. */
+export function getFolderDisplayStyle(folderId: string): { color: string } {
+  const root = getRootFolder(folderId);
+  return {
+    color: root?.color ?? '#006bd6',
+  };
 }
 
 /** Flat list of every article visible to a viewing unit, across all reachable
@@ -854,14 +953,14 @@ export function getAllVisibleArticles(
 }
 
 /** Folders that can serve as a parent for a NEW sub-folder in the given unit:
- *  must be own + active + at depth < 2 (so the child won't exceed max depth). */
+ *  must be own + active + at depth < 3 (so the child won't exceed max depth). */
 export function getEligibleParentFolders(unitId: string): KBFolder[] {
   return allFolders
     .filter(
       (f) =>
         f.unitId === unitId &&
         f.status === 'active' &&
-        getFolderDepth(f.id) < 2
+        getFolderDepth(f.id) < 3
     )
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -923,6 +1022,16 @@ export function setFolderVisibility(folderId: string, visibility: KBFolder['visi
   commit();
 }
 
+/** Update a folder's color. Only meaningful on root folders since sub-folders
+ *  resolve their color from the root ancestor at render time. */
+export function setFolderColor(folderId: string, color: string): void {
+  const folder = getFolder(folderId);
+  if (!folder) return;
+  folder.color = color;
+  folder.updatedAt = new Date().toISOString();
+  commit();
+}
+
 /** Archive a folder and all descendants (sub-folders + articles). */
 export function archiveFolderTree(folderId: string): void {
   const folder = getFolder(folderId);
@@ -979,17 +1088,36 @@ export function restoreFolderTree(folderId: string): void {
   commit();
 }
 
-/** Counts of articles + sub-folders inside a folder (recursive). For archive impact summary. */
+/** Counts of articles + sub-folders inside a folder (recursive). For
+ *  archive/delete impact summary. Includes articles in any status. */
 export function getFolderImpact(folderId: string): { articles: number; subFolders: number } {
   let articles = 0;
   let subFolders = 0;
   const walk = (id: string, isRoot: boolean) => {
     if (!isRoot) subFolders++;
-    articles += allArticles.filter((a) => a.folderId === id && a.status !== 'archived').length;
-    getChildFolders(id).forEach((c) => walk(c.id, false));
+    articles += allArticles.filter((a) => a.folderId === id).length;
+    getChildFolders(id, { includeArchived: true }).forEach((c) => walk(c.id, false));
   };
   walk(folderId, true);
   return { articles, subFolders };
+}
+
+/** Hard-delete a folder, all its sub-folders, and every article inside. */
+export function deleteFolderTree(folderId: string): void {
+  const collect = (id: string): string[] => {
+    const ids = [id];
+    getChildFolders(id, { includeArchived: true }).forEach((c) => ids.push(...collect(c.id)));
+    return ids;
+  };
+  const folderIds = new Set(collect(folderId));
+  // Articles first (so re-renders see the parent folder still exist briefly).
+  for (let i = allArticles.length - 1; i >= 0; i--) {
+    if (folderIds.has(allArticles[i].folderId)) allArticles.splice(i, 1);
+  }
+  for (let i = allFolders.length - 1; i >= 0; i--) {
+    if (folderIds.has(allFolders[i].id)) allFolders.splice(i, 1);
+  }
+  commit();
 }
 
 // ── Article mutations ──
@@ -1025,6 +1153,14 @@ export function moveArticle(id: string, folderId: string): KBArticle | undefined
   article.updatedAt = new Date().toISOString();
   commit();
   return article;
+}
+
+/** Hard-delete an article. Works regardless of status (draft/published/archived). */
+export function deleteArticle(id: string): void {
+  const idx = allArticles.findIndex((a) => a.id === id);
+  if (idx < 0) return;
+  allArticles.splice(idx, 1);
+  commit();
 }
 
 // ── Reset ──

@@ -106,7 +106,7 @@ export function ArticleRow({ article, onClick }: ArticleCardProps) {
 
       {/* Status */}
       <td className="py-2.5 pr-4">
-        <StatusBadge status={article.status} />
+        <StatusBadge status={article.status} showPublished />
       </td>
 
       {/* Updated */}

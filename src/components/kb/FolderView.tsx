@@ -15,6 +15,7 @@ import {
   getArticlesInFolder,
   getArticleCount,
   getUnit,
+  getFolderDisplayStyle,
 } from '@/data/mock-data';
 import { ArticleRow, ArticleCard } from './ArticleCard';
 import { VisibilityBadge } from './VisibilityBadge';
@@ -95,8 +96,8 @@ function FolderHeaderMenu({
 }
 
 /** Colored rounded-square icon used in folder + sub-folder headers.
- *  When `collapsed` is provided, the inner BookOpen icon swaps to a chevron
- *  on hover (over the parent `group`), giving a click-to-expand affordance. */
+ *  When `collapsed` is provided, the BookOpen icon swaps to a chevron on hover
+ *  (over the parent `group`), giving a click-to-expand affordance. */
 export function FolderIcon({
   color,
   size = 'md',
@@ -140,20 +141,26 @@ export function FolderIcon({
 
 /** Renders a folder's articles as either a card grid or a table.
  *  Used both for the parent folder's direct articles and for each
- *  sub-folder section. */
+ *  sub-folder section. `indentPx` shifts the content to the right so
+ *  it aligns with a nested FolderSection's header. */
 export function ArticleListBlock({
   articles,
   viewMode,
+  indentPx = 0,
   onArticleClick,
 }: {
   articles: KBArticle[];
   viewMode: 'grid' | 'list';
+  indentPx?: number;
   onArticleClick?: (article: KBArticle) => void;
 }) {
   if (articles.length === 0) return null;
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-3 gap-3 px-4 pb-4">
+      <div
+        className="grid grid-cols-3 gap-3 pr-4 pb-4"
+        style={{ paddingLeft: 16 + indentPx }}
+      >
         {articles.map((article) => (
           <ArticleCard
             key={article.id}
@@ -165,37 +172,39 @@ export function ArticleListBlock({
     );
   }
   return (
-    <table className="w-full table-fixed">
-      <thead>
-        <tr className="border-y border-[#edeff3] bg-[#fafbfc]">
-          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pl-4 pr-4">
-            Article
-          </th>
-          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[140px]">
-            Unit
-          </th>
-          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
-            Status
-          </th>
-          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
-            Updated
-          </th>
-          <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[180px]">
-            Owner
-          </th>
-          <th className="w-[44px] py-2 pr-2"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {articles.map((article) => (
-          <ArticleRow
-            key={article.id}
-            article={article}
-            onClick={() => onArticleClick?.(article)}
-          />
-        ))}
-      </tbody>
-    </table>
+    <div style={{ paddingLeft: indentPx }}>
+      <table className="w-full table-fixed">
+        <thead>
+          <tr className="border-y border-[#edeff3] bg-[#fafbfc]">
+            <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pl-4 pr-4">
+              Article
+            </th>
+            <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[140px]">
+              Unit
+            </th>
+            <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
+              Status
+            </th>
+            <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[100px]">
+              Updated
+            </th>
+            <th className="text-left text-[12px] font-medium text-[#697a9b] py-2 pr-4 w-[180px]">
+              Owner
+            </th>
+            <th className="w-[44px] py-2 pr-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {articles.map((article) => (
+            <ArticleRow
+              key={article.id}
+              article={article}
+              onClick={() => onArticleClick?.(article)}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -204,9 +213,7 @@ export function ArticleListBlock({
  *  Chevron is hidden by default and revealed on hover.
  *
  *  When `recursive` is true, the section also renders nested sub-folder sections
- *  (rendered with size="sm"). Used by AllArticlesView to render a flat
- *  hierarchy of every visible folder. `search` filters articles by title and
- *  hides empty sections. */
+ *  with `depth` bumped by 1, producing the visual nesting hierarchy. */
 export function FolderSection({
   folder,
   viewingUnitId,
@@ -215,6 +222,7 @@ export function FolderSection({
   size = 'sm',
   recursive,
   search,
+  depth = 0,
   onArticleClick,
   onSelectFolder,
 }: {
@@ -225,6 +233,10 @@ export function FolderSection({
   size?: 'sm' | 'md';
   recursive?: boolean;
   search?: string;
+  /** Nesting depth inside the rendering parent. 0 = first level below the
+   *  selected folder; 1 = one level deeper. Controls indentation and
+   *  header styling so the hierarchy is readable past 2 levels. */
+  depth?: number;
   onArticleClick?: (article: KBArticle) => void;
   onSelectFolder: (folderId: string) => void;
 }) {
@@ -254,14 +266,28 @@ export function FolderSection({
   }
 
   const count = getArticleCount(folder.id, viewingUnitId);
-  const titleClasses =
-    size === 'md'
-      ? 'text-[16px] font-semibold leading-[24px]'
-      : 'text-[14px] font-medium leading-[20px]';
+  const displayStyle = getFolderDisplayStyle(folder.id);
+  const nested = depth > 0;
+  const indentPx = depth * 24;
+  const titleClasses = nested
+    ? 'text-[13px] font-medium leading-[18px]'
+    : size === 'md'
+    ? 'text-[16px] font-semibold leading-[24px]'
+    : 'text-[14px] font-medium leading-[20px]';
+  const titleColor = isArchived
+    ? 'text-[#697a9b] line-through'
+    : nested
+    ? 'text-[#525f7a]'
+    : 'text-[#1f242e]';
+  const headerPadY = nested ? 'py-2.5' : 'py-4';
+  const iconSize = nested ? 'sm' : size;
 
   return (
-    <div className="border-b border-[#edeff3]">
-      <div className="flex items-center gap-2 px-4 py-4">
+    <div className={nested ? '' : 'border-b border-[#edeff3]'}>
+      <div
+        className={`flex items-center gap-2 pr-4 ${headerPadY}`}
+        style={{ paddingLeft: 16 + indentPx }}
+      >
         <button
           type="button"
           onClick={() => setCollapsed((p) => !p)}
@@ -269,8 +295,8 @@ export function FolderSection({
           title={collapsed ? 'Expand' : 'Collapse'}
         >
           <FolderIcon
-            color={folder.color}
-            size={size}
+            color={displayStyle.color}
+            size={iconSize}
             dimmed={isArchived}
             collapsed={collapsed}
           />
@@ -281,11 +307,7 @@ export function FolderSection({
           className="flex items-center gap-2 flex-1 min-w-0 text-left"
           title={`Open ${folder.name}`}
         >
-          <span
-            className={`${titleClasses} truncate ${
-              isArchived ? 'text-[#697a9b] line-through' : 'text-[#1f242e]'
-            }`}
-          >
+          <span className={`${titleClasses} ${titleColor} truncate`}>
             {folder.name}
           </span>
           <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[12px] font-medium text-[#525f7a] bg-white border border-[#e0e4eb] rounded-lg min-w-[24px] text-center leading-[16px] shrink-0">
@@ -305,11 +327,15 @@ export function FolderSection({
             <ArticleListBlock
               articles={articles}
               viewMode={viewMode}
+              indentPx={indentPx}
               onArticleClick={onArticleClick}
             />
           ) : (
             !recursive && (
-              <div className="px-4 pb-4 text-[13px] text-[#697a9b] italic">
+              <div
+                className="pr-4 pb-4 text-[13px] text-[#697a9b] italic"
+                style={{ paddingLeft: 16 + indentPx }}
+              >
                 No articles in this folder yet.
               </div>
             )
@@ -323,7 +349,9 @@ export function FolderSection({
                 showArchived={showArchived}
                 viewMode={viewMode}
                 size="sm"
+                recursive
                 search={search}
+                depth={depth + 1}
                 onArticleClick={onArticleClick}
                 onSelectFolder={onSelectFolder}
               />
@@ -364,6 +392,7 @@ export function FolderView({
     includeArchived: showArchived && isOwn,
   });
   const totalCount = getArticleCount(folderId, viewingUnitId);
+  const displayStyle = getFolderDisplayStyle(folderId);
 
   const isEmpty = subFolders.length === 0 && articles.length === 0;
 
@@ -379,7 +408,7 @@ export function FolderView({
             title={collapsed ? 'Expand' : 'Collapse'}
           >
             <FolderIcon
-              color={folder.color}
+              color={displayStyle.color}
               size={isSubFolder ? 'sm' : 'md'}
               dimmed={isArchived}
               collapsed={collapsed}
@@ -490,7 +519,8 @@ export function FolderView({
               </div>
             )}
 
-            {/* Sub-folders inline as collapsible sections */}
+            {/* Sub-folders inline as collapsible sections — recursive so that
+                a level-1 folder also surfaces its level-3 descendants. */}
             {subFolders.map((sf) => (
               <FolderSection
                 key={sf.id}
@@ -499,6 +529,7 @@ export function FolderView({
                 showArchived={showArchived}
                 viewMode={viewMode}
                 size="sm"
+                recursive
                 onArticleClick={onArticleClick}
                 onSelectFolder={onSelectFolder}
               />

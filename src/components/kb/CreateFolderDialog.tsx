@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FOLDER_COLORS, DEFAULT_FOLDER_COLOR } from './folder-icons';
 
 export interface ParentPickerOption {
   id: string;
@@ -14,7 +15,11 @@ interface CreateFolderDialogProps {
     options: ParentPickerOption[];
     initialId: string;
   };
-  onConfirm: (result: { name: string; parentId: string | null }) => void;
+  onConfirm: (result: {
+    name: string;
+    parentId: string | null;
+    color?: string;
+  }) => void;
   onCancel: () => void;
 }
 
@@ -27,10 +32,12 @@ export function CreateFolderDialog({
 }: CreateFolderDialogProps) {
   const [name, setName] = useState(initialName);
   const [parentId, setParentId] = useState(parentPicker?.initialId ?? '');
+  const [color, setColor] = useState<string>(DEFAULT_FOLDER_COLOR);
   const [error, setError] = useState('');
 
   const isRename = mode === 'rename';
   const isSubFolder = !!parentPicker;
+  const isRoot = !isRename && !isSubFolder;
   const title = isRename
     ? 'Rename folder'
     : isSubFolder
@@ -39,8 +46,8 @@ export function CreateFolderDialog({
   const description = isRename
     ? 'Enter a new name for this folder.'
     : isSubFolder
-    ? 'Pick a parent folder and give the new sub-folder a name.'
-    : 'Add a new folder to organize articles in this unit.';
+    ? 'Pick a parent folder and give the new sub-folder a name. The sub-folder inherits color from its top-level folder.'
+    : 'Add a top-level folder to organize articles in this unit.';
   const confirmLabel = isRename ? 'Rename' : 'Create';
 
   const handleSubmit = () => {
@@ -64,13 +71,14 @@ export function CreateFolderDialog({
     onConfirm({
       name: trimmed,
       parentId: isSubFolder ? parentId : null,
+      ...(isRoot ? { color } : {}),
     });
   };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
-      <div className="relative bg-white rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] w-[400px] overflow-hidden">
+      <div className={`relative bg-white rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] ${isRoot ? 'w-[440px]' : 'w-[400px]'} overflow-hidden`}>
         <div className="px-5 pt-5 pb-3">
           <h3 className="text-[16px] font-medium text-[#1f242e] leading-[24px]">{title}</h3>
           <p className="text-[13px] text-[#697a9b] mt-1">{description}</p>
@@ -123,6 +131,31 @@ export function CreateFolderDialog({
           </div>
 
           {error && <p className="text-[12px] text-red-500 -mt-1">{error}</p>}
+
+          {isRoot && (
+            <div>
+              <label className="block text-[13px] text-[#3d475c] mb-1.5">Color</label>
+              <div className="flex flex-wrap gap-1.5">
+                {FOLDER_COLORS.map((c) => {
+                  const active = c === color;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      title={c}
+                      className={`w-6 h-6 rounded-md transition-transform ${
+                        active
+                          ? 'ring-2 ring-[#006bd6] ring-offset-1 scale-110'
+                          : 'hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[#edeff3]">

@@ -9,10 +9,11 @@ import {
   MoreHorizontal,
   Pencil,
   FolderPlus,
-  Archive,
   Eye,
-  RotateCcw,
   Files,
+  Lock,
+  Palette,
+  Trash2,
 } from 'lucide-react';
 import type { KBFolder } from '@/types';
 import {
@@ -20,9 +21,9 @@ import {
   getSharedRootFolders,
   getSubUnitRootFolders,
   getChildFolders,
-  getArticleCount,
   getFolderDepth,
   getFolder,
+  getFolderDisplayStyle,
 } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
 
@@ -30,8 +31,8 @@ export type FolderAction =
   | 'create-sub'
   | 'rename'
   | 'change-visibility'
-  | 'archive'
-  | 'restore';
+  | 'change-color'
+  | 'delete';
 
 interface FolderTreeProps {
   unitId: string;
@@ -40,7 +41,6 @@ interface FolderTreeProps {
   showArchived: boolean;
   showSubUnits: boolean;
   isAllArticlesActive: boolean;
-  allArticlesCount: number;
   onSelectAllArticles: () => void;
   onCreateRootFolder?: () => void;
   onCreateSubFolder?: (parent: KBFolder | null) => void;
@@ -59,7 +59,7 @@ interface FolderNodeProps {
   defaultExpanded?: boolean;
 }
 
-const MAX_FOLDER_DEPTH = 2;
+const MAX_FOLDER_DEPTH = 3;
 
 export function buildFolderActions(folder: KBFolder): {
   icon: React.ReactNode;
@@ -68,18 +68,15 @@ export function buildFolderActions(folder: KBFolder): {
   disabled?: boolean;
   danger?: boolean;
 }[] {
-  if (folder.status === 'archived') {
-    return [
-      {
-        icon: <RotateCcw className="w-3.5 h-3.5" />,
-        label: 'Restore',
-        action: 'restore',
-      },
-    ];
-  }
-
   const canAddSubfolder = getFolderDepth(folder.id) < MAX_FOLDER_DEPTH;
-  return [
+  const isRoot = folder.parentFolderId === null;
+  const items: {
+    icon: React.ReactNode;
+    label: string;
+    action: FolderAction;
+    disabled?: boolean;
+    danger?: boolean;
+  }[] = [
     {
       icon: <FolderPlus className="w-3.5 h-3.5" />,
       label: 'Create sub-folder',
@@ -88,8 +85,22 @@ export function buildFolderActions(folder: KBFolder): {
     },
     { icon: <Pencil className="w-3.5 h-3.5" />, label: 'Rename', action: 'rename' },
     { icon: <Eye className="w-3.5 h-3.5" />, label: 'Change visibility', action: 'change-visibility' },
-    { icon: <Archive className="w-3.5 h-3.5" />, label: 'Archive', action: 'archive', danger: true },
   ];
+  // Color is a root-folder property; sub-folders inherit it.
+  if (isRoot) {
+    items.push({
+      icon: <Palette className="w-3.5 h-3.5" />,
+      label: 'Change color',
+      action: 'change-color',
+    });
+  }
+  items.push({
+    icon: <Trash2 className="w-3.5 h-3.5" />,
+    label: 'Delete',
+    action: 'delete',
+    danger: true,
+  });
+  return items;
 }
 
 function FolderActionsMenu({
@@ -169,8 +180,9 @@ function FolderNode({
   const [expanded, setExpanded] = useState(!!defaultExpanded);
   const [menuOpen, setMenuOpen] = useState(false);
   const isSelected = selectedFolderId === folder.id;
-  const count = getArticleCount(folder.id, viewingUnitId);
   const isArchived = folder.status === 'archived';
+  const isPrivate = folder.visibility === 'current_unit_only';
+  const displayStyle = getFolderDisplayStyle(folder.id);
 
   return (
     <div>
@@ -207,7 +219,7 @@ function FolderNode({
           className={`w-[18px] h-[18px] shrink-0 ${
             isShared || isArchived ? 'opacity-60' : ''
           }`}
-          style={{ color: folder.color, fill: folder.color }}
+          style={{ color: displayStyle.color, fill: displayStyle.color }}
           strokeWidth={1.5}
         />
         <span
@@ -220,10 +232,12 @@ function FolderNode({
             archived
           </span>
         )}
-        {!isArchived && count > 0 && (
-          <span className="text-[12px] text-[#0052a3] tabular-nums shrink-0">
-            {count}
-          </span>
+        {!isArchived && isPrivate && (
+          <Lock
+            className="w-3.5 h-3.5 text-[#697a9b] shrink-0"
+            strokeWidth={2}
+            aria-label="Private"
+          />
         )}
         {!isShared && onAction && (
           <div className="relative shrink-0">
@@ -298,7 +312,7 @@ function CreateFolderMenu({
   const preselect =
     selectedOwnFolder &&
     selectedOwnFolder.status === 'active' &&
-    getFolderDepth(selectedOwnFolder.id) < 2
+    getFolderDepth(selectedOwnFolder.id) < MAX_FOLDER_DEPTH
       ? selectedOwnFolder
       : null;
 
@@ -386,11 +400,6 @@ export function FolderTree({
             }`}
           />
           <span className="text-[13px] flex-1 text-left">All articles</span>
-          {allArticlesCount > 0 && (
-            <span className="text-[11px] text-[#697a9b] tabular-nums shrink-0">
-              {allArticlesCount}
-            </span>
-          )}
         </button>
       </div>
 
@@ -446,17 +455,17 @@ export function FolderTree({
 
       <div className="border-t border-[#edeff3]" />
 
-      {/* Shared with you */}
+      {/* From parent units (cascade down from ancestor units) */}
       <div className="flex flex-col shrink-0">
         <div className="px-3 pt-3 pb-1.5">
           <span className="text-[11px] font-medium uppercase tracking-wide text-[#697a9b]">
-            Shared with you
+            From parent units
           </span>
         </div>
         <div className="flex flex-col px-1.5 pb-3 overflow-y-auto">
           {sharedFolders.length === 0 ? (
             <div className="px-2 py-2 text-[12px] text-[#697a9b] italic">
-              Nothing shared yet
+              Nothing from parent units yet
             </div>
           ) : (
             sharedFolders.map((folder) => (

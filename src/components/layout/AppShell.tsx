@@ -8,8 +8,11 @@ import { ArticleEditor } from '../kb/ArticleEditor';
 import { ArchiveDialog } from '../kb/ArchiveDialog';
 import { MoveDialog } from '../kb/MoveDialog';
 import { CreateFolderDialog } from '../kb/CreateFolderDialog';
-import { ArchiveFolderDialog } from '../kb/ArchiveFolderDialog';
+import { DeleteFolderDialog } from '../kb/DeleteFolderDialog';
+import { DeleteArticleDialog } from '../kb/DeleteArticleDialog';
 import { ChangeVisibilityDialog } from '../kb/ChangeVisibilityDialog';
+import { ChangeColorDialog } from '../kb/ChangeColorDialog';
+import { DEFAULT_FOLDER_COLOR } from '../kb/folder-icons';
 import type { FolderAction } from '../kb/FolderTree';
 import type { KBArticle, ArticleStatus, KBFolder, Visibility } from '@/types';
 import {
@@ -19,12 +22,13 @@ import {
   contacts,
   addFolder,
   renameFolder,
-  archiveFolderTree,
-  restoreFolderTree,
+  deleteFolderTree,
   setFolderVisibility,
+  setFolderColor,
   upsertArticle,
   setArticleStatus,
   moveArticle,
+  deleteArticle,
   getEligibleParentFolders,
   getFolder,
 } from '@/data/mock-data';
@@ -38,18 +42,13 @@ type ModalState =
 type DialogState =
   | { type: 'none' }
   | { type: 'archive'; article: KBArticle }
+  | { type: 'delete-article'; article: KBArticle }
   | { type: 'move'; article: KBArticle }
   | { type: 'create-folder'; parent: KBFolder | null; isSubFolder: boolean }
   | { type: 'rename-folder'; folder: KBFolder }
-  | { type: 'archive-folder'; folder: KBFolder }
-  | { type: 'change-folder-visibility'; folder: KBFolder };
-
-const folderColors = ['#006bd6', '#16a34a', '#7c3aed', '#ff9124', '#e11d48', '#0891b2', '#d97706'];
-
-function pickFolderColor(parent: KBFolder | null): string {
-  if (parent) return parent.color;
-  return folderColors[Math.floor(Math.random() * folderColors.length)];
-}
+  | { type: 'delete-folder'; folder: KBFolder }
+  | { type: 'change-folder-visibility'; folder: KBFolder }
+  | { type: 'change-folder-color'; folder: KBFolder };
 
 export function AppShell() {
   const [selectedUnitId, setSelectedUnitId] = useState(defaultSelectedUnitId);
@@ -98,11 +97,11 @@ export function AppShell() {
       case 'change-visibility':
         setDialog({ type: 'change-folder-visibility', folder });
         break;
-      case 'archive':
-        setDialog({ type: 'archive-folder', folder });
+      case 'change-color':
+        setDialog({ type: 'change-folder-color', folder });
         break;
-      case 'restore':
-        restoreFolderTree(folder.id);
+      case 'delete':
+        setDialog({ type: 'delete-folder', folder });
         break;
     }
   }, []);
@@ -116,18 +115,21 @@ export function AppShell() {
   }, []);
 
   const handleCreateFolderConfirm = useCallback(
-    (result: { name: string; parentId: string | null }) => {
+    (result: { name: string; parentId: string | null; color?: string }) => {
       if (dialog.type !== 'create-folder') return;
       // Pull the latest parent state from the dropdown (not just the dialog's
       // initial parent), so user can switch parent before confirming.
       const parent = result.parentId ? getFolder(result.parentId) ?? null : null;
       const now = new Date().toISOString();
+      // Sub-folder inherits color from its parent (which itself inherits from
+      // the root, so the chain converges to the root's color).
+      const color = parent ? parent.color ?? DEFAULT_FOLDER_COLOR : result.color ?? DEFAULT_FOLDER_COLOR;
       const newFolder: KBFolder = {
         id: `f-new-${Date.now()}`,
         unitId: parent?.unitId ?? selectedUnitId,
         parentFolderId: parent?.id ?? null,
         name: result.name,
-        color: pickFolderColor(parent),
+        color,
         visibility: parent?.visibility ?? 'unit_and_subunits',
         status: 'active',
         sortOrder: 999,
@@ -152,16 +154,32 @@ export function AppShell() {
     [dialog]
   );
 
-  const handleArchiveFolderConfirm = useCallback(() => {
-    if (dialog.type !== 'archive-folder') return;
-    archiveFolderTree(dialog.folder.id);
+  const handleDeleteFolderConfirm = useCallback(() => {
+    if (dialog.type !== 'delete-folder') return;
+    deleteFolderTree(dialog.folder.id);
     setDialog({ type: 'none' });
+  }, [dialog]);
+
+  const handleDeleteArticleConfirm = useCallback(() => {
+    if (dialog.type !== 'delete-article') return;
+    deleteArticle(dialog.article.id);
+    setDialog({ type: 'none' });
+    setModal({ type: 'none' });
   }, [dialog]);
 
   const handleVisibilityConfirm = useCallback(
     (visibility: Visibility) => {
       if (dialog.type !== 'change-folder-visibility') return;
       setFolderVisibility(dialog.folder.id, visibility);
+      setDialog({ type: 'none' });
+    },
+    [dialog]
+  );
+
+  const handleColorConfirm = useCallback(
+    (color: string) => {
+      if (dialog.type !== 'change-folder-color') return;
+      setFolderColor(dialog.folder.id, color);
       setDialog({ type: 'none' });
     },
     [dialog]
@@ -199,6 +217,7 @@ export function AppShell() {
           onEdit={() => setModal({ type: 'edit', article: modal.article })}
           onStatusChange={handleStatusChange}
           onMove={(article) => setDialog({ type: 'move', article })}
+          onDelete={(article) => setDialog({ type: 'delete-article', article })}
         />
       )}
       {modal.type === 'edit' && (
@@ -273,10 +292,17 @@ export function AppShell() {
           onCancel={closeDialog}
         />
       )}
-      {dialog.type === 'archive-folder' && (
-        <ArchiveFolderDialog
+      {dialog.type === 'delete-folder' && (
+        <DeleteFolderDialog
           folder={dialog.folder}
-          onConfirm={handleArchiveFolderConfirm}
+          onConfirm={handleDeleteFolderConfirm}
+          onCancel={closeDialog}
+        />
+      )}
+      {dialog.type === 'delete-article' && (
+        <DeleteArticleDialog
+          article={dialog.article}
+          onConfirm={handleDeleteArticleConfirm}
           onCancel={closeDialog}
         />
       )}
@@ -284,6 +310,13 @@ export function AppShell() {
         <ChangeVisibilityDialog
           folder={dialog.folder}
           onConfirm={handleVisibilityConfirm}
+          onCancel={closeDialog}
+        />
+      )}
+      {dialog.type === 'change-folder-color' && (
+        <ChangeColorDialog
+          folder={dialog.folder}
+          onConfirm={handleColorConfirm}
           onCancel={closeDialog}
         />
       )}
