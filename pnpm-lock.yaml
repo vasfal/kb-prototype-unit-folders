@@ -11,6 +11,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.72.0(react@19.2.4))
+      '@lexical/code':
+        specifier: ^0.44.0
+        version: 0.44.0
       '@lexical/history':
         specifier: ^0.44.0
         version: 0.44.0
@@ -30,6 +33,9 @@ importers:
         specifier: ^0.44.0
         version: 0.44.0
       '@lexical/selection':
+        specifier: ^0.44.0
+        version: 0.44.0
+      '@lexical/table':
         specifier: ^0.44.0
         version: 0.44.0
       '@lexical/utils':
@@ -400,6 +406,12 @@ packages:
 
   '@lexical/code-core@0.44.0':
     resolution: {integrity: sha512-m57JyXTIvW1tsqw/Vuogk8jqWCZZIeFQbWybRc46ytR8ReDgzPRODpN8+dacIIeRH5yC5UC3lAa743mtdNkxqg==}
+
+  '@lexical/code-prism@0.44.0':
+    resolution: {integrity: sha512-E8hmosuviwDfZqNyFKf2Vym8lV4shRFRHsRgYHzA3UCp88OqsxcSpyIwZk276khvJ2Zd4DupqJht/h+djezO4Q==}
+
+  '@lexical/code@0.44.0':
+    resolution: {integrity: sha512-d2rZUlGC8noGn/XbVrPyPZ86gYKT5a1DdsCSYIWnw/aqAs9G0xaIBcV9ABH+9cUS9fY5GDHaKTllHKIA8VRAxQ==}
 
   '@lexical/devtools-core@0.44.0':
     resolution: {integrity: sha512-X3uNG3P1vOsdzmEcy+7m9DxAcIVtVUZnvskmLqqLs6VluVVwH9xy7h1bPsvlDKvj1Nj73tWJ3TW0qXQWDTo5tw==}
@@ -2007,6 +2019,10 @@ packages:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
 
+  prismjs@1.30.0:
+    resolution: {integrity: sha512-DEvV2ZF2r2/63V+tK8hQvrR2ZGn10srHbXviTlcv7Kpzw8jWiNTqbVgjO3IY8RxrrOUF8VPMQQFysYYYv0YZxw==}
+    engines: {node: '>=6'}
+
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
@@ -2573,6 +2589,20 @@ snapshots:
 
   '@lexical/code-core@0.44.0':
     dependencies:
+      '@lexical/extension': 0.44.0
+      lexical: 0.44.0
+
+  '@lexical/code-prism@0.44.0':
+    dependencies:
+      '@lexical/code-core': 0.44.0
+      '@lexical/extension': 0.44.0
+      lexical: 0.44.0
+      prismjs: 1.30.0
+
+  '@lexical/code@0.44.0':
+    dependencies:
+      '@lexical/code-core': 0.44.0
+      '@lexical/code-prism': 0.44.0
       '@lexical/extension': 0.44.0
       lexical: 0.44.0
 
@@ -4176,6 +4206,8 @@ snapshots:
       source-map-js: 1.2.1
 
   prelude-ls@1.2.1: {}
+
+  prismjs@1.30.0: {}
 
   punycode@2.3.1: {}
 

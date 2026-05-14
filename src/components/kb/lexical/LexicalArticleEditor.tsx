@@ -19,8 +19,25 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
+import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
+import {
+  HorizontalRuleNode,
+  INSERT_HORIZONTAL_RULE_COMMAND,
+} from '@lexical/react/LexicalHorizontalRuleNode';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { HeadingNode, $createHeadingNode } from '@lexical/rich-text';
+import {
+  HeadingNode,
+  QuoteNode,
+  $createHeadingNode,
+  $createQuoteNode,
+} from '@lexical/rich-text';
+import { CodeNode, CodeHighlightNode, $createCodeNode } from '@lexical/code';
+import {
+  TableNode,
+  TableCellNode,
+  TableRowNode,
+  INSERT_TABLE_COMMAND,
+} from '@lexical/table';
 import {
   ListNode,
   ListItemNode,
@@ -43,6 +60,7 @@ import {
   AtSign,
   Bold,
   ChevronDown,
+  Code2,
   Heading1,
   Heading2,
   Heading3,
@@ -52,9 +70,13 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  Minus,
   Paperclip,
+  Quote,
   Redo,
   Smile,
+  Strikethrough,
+  Table as TableIcon,
   Underline as UnderlineIcon,
   Undo,
 } from 'lucide-react';
@@ -93,6 +115,15 @@ const editorTheme = {
     listitem: 'mb-1',
   },
   link: 'text-[#006bd6] underline',
+  quote:
+    'border-l-[3px] border-[#d0d5dd] pl-3 my-3 text-[#525f7a] italic',
+  code:
+    'block bg-[#f5f6f8] border border-[#edeff3] rounded-md px-3 py-2 my-3 font-mono text-[13px] leading-[20px] text-[#1f242e] whitespace-pre-wrap',
+  table: 'border-collapse my-3 w-full',
+  tableCell:
+    'border border-[#e0e4eb] px-2 py-1.5 align-top min-w-[80px] text-[14px]',
+  tableCellHeader:
+    'border border-[#e0e4eb] px-2 py-1.5 align-top min-w-[80px] text-[14px] bg-[#fafbfc] font-semibold',
   text: {
     bold: 'font-semibold',
     italic: 'italic',
@@ -115,12 +146,19 @@ export const LexicalArticleEditor = forwardRef(function LexicalArticleEditor(
     },
     nodes: [
       HeadingNode,
+      QuoteNode,
+      CodeNode,
+      CodeHighlightNode,
       ListNode,
       ListItemNode,
       LinkNode,
       ImageNode,
       FileAttachmentNode,
       MentionNode,
+      HorizontalRuleNode,
+      TableNode,
+      TableCellNode,
+      TableRowNode,
     ],
   };
 
@@ -148,6 +186,7 @@ export const LexicalArticleEditor = forwardRef(function LexicalArticleEditor(
       <HistoryPlugin />
       <ListPlugin />
       <LinkPlugin />
+      <TablePlugin />
       <MentionsPlugin />
       <InitialHtmlPlugin html={initialHtml} />
       <ApiPlugin apiRef={ref} />
@@ -450,8 +489,9 @@ function Toolbar() {
     bold: false,
     italic: false,
     underline: false,
+    strikethrough: false,
     link: false,
-    block: 'paragraph' as 'paragraph' | 'h1' | 'h2' | 'h3' | 'ul' | 'ol',
+    block: 'paragraph' as BlockType,
     align: 'left' as 'left' | 'center' | 'right',
   });
   /** Last-applied colors. Used to show indicator bars under the toolbar
@@ -489,6 +529,7 @@ function Toolbar() {
           bold: sel.hasFormat('bold'),
           italic: sel.hasFormat('italic'),
           underline: sel.hasFormat('underline'),
+          strikethrough: sel.hasFormat('strikethrough'),
           link: isLink,
           block: detectBlockType(sel),
           align,
@@ -540,6 +581,54 @@ function Toolbar() {
     } else {
       editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
     }
+  };
+
+  const toggleQuote = () => {
+    editor.update(() => {
+      const sel = $getSelection();
+      if (!$isRangeSelection(sel)) return;
+      if (formats.block === 'quote') {
+        $setBlocksType(sel, () => $createParagraphNode());
+      } else {
+        $setBlocksType(sel, () => $createQuoteNode());
+      }
+    });
+  };
+
+  const toggleCodeBlock = () => {
+    editor.update(() => {
+      const sel = $getSelection();
+      if (!$isRangeSelection(sel)) return;
+      if (formats.block === 'code') {
+        $setBlocksType(sel, () => $createParagraphNode());
+      } else {
+        $setBlocksType(sel, () => $createCodeNode());
+      }
+    });
+  };
+
+  const insertHorizontalRule = () => {
+    editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
+  };
+
+  // Strike & underline are mutually exclusive — turning one on flips the
+  // other off so text never carries both decorations at once.
+  const toggleUnderline = () => {
+    apply(() => {
+      if (!formats.underline && formats.strikethrough) {
+        editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
+      }
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
+    });
+  };
+
+  const toggleStrikethrough = () => {
+    apply(() => {
+      if (!formats.strikethrough && formats.underline) {
+        editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
+      }
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
+    });
   };
 
   const toggleLink = () => {
@@ -646,10 +735,17 @@ function Toolbar() {
       </Btn>
       <Btn
         active={formats.underline}
-        onClick={() => apply(() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline'))}
+        onClick={toggleUnderline}
         title="Underline"
       >
         <UnderlineIcon className="w-4 h-4" />
+      </Btn>
+      <Btn
+        active={formats.strikethrough}
+        onClick={toggleStrikethrough}
+        title="Strikethrough"
+      >
+        <Strikethrough className="w-4 h-4" />
       </Btn>
 
       <TextColorButton
@@ -689,6 +785,27 @@ function Toolbar() {
       <AlignButton
         currentAlign={formats.align}
         onPick={(align) => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, align)}
+      />
+
+      <Divider />
+
+      <Btn active={formats.block === 'quote'} onClick={toggleQuote} title="Blockquote">
+        <Quote className="w-4 h-4" />
+      </Btn>
+      <Btn active={formats.block === 'code'} onClick={toggleCodeBlock} title="Code block">
+        <Code2 className="w-4 h-4" />
+      </Btn>
+      <Btn onClick={insertHorizontalRule} title="Horizontal divider">
+        <Minus className="w-4 h-4" />
+      </Btn>
+      <TableSizeButton
+        onPick={(rows, columns) =>
+          editor.dispatchCommand(INSERT_TABLE_COMMAND, {
+            rows: String(rows),
+            columns: String(columns),
+            includeHeaders: true,
+          })
+        }
       />
 
       <Divider />
@@ -915,6 +1032,88 @@ function AlignButton({
   );
 }
 
+// ── Table size picker ─────────────────────────────────────────────────────
+
+const TABLE_PICKER_MAX = 6;
+
+function TableSizeButton({
+  onPick,
+}: {
+  onPick: (rows: number, columns: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  return (
+    <div className="relative inline-flex" ref={ref}>
+      <Tooltip label="Insert table">
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setOpen((p) => !p);
+            setHover({ r: 0, c: 0 });
+          }}
+          className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+            open ? 'bg-[#edeff3] text-[#1f242e]' : 'text-[#525f7a] hover:bg-[#fafbfc]'
+          }`}
+        >
+          <TableIcon className="w-4 h-4" />
+        </button>
+      </Tooltip>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] p-2">
+          <div
+            className="grid gap-[2px]"
+            style={{
+              gridTemplateColumns: `repeat(${TABLE_PICKER_MAX}, 16px)`,
+              gridTemplateRows: `repeat(${TABLE_PICKER_MAX}, 16px)`,
+            }}
+            onMouseLeave={() => setHover({ r: 0, c: 0 })}
+          >
+            {Array.from({ length: TABLE_PICKER_MAX * TABLE_PICKER_MAX }).map(
+              (_, i) => {
+                const r = Math.floor(i / TABLE_PICKER_MAX) + 1;
+                const c = (i % TABLE_PICKER_MAX) + 1;
+                const active = r <= hover.r && c <= hover.c;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onMouseEnter={() => setHover({ r, c })}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      onPick(r, c);
+                      setOpen(false);
+                    }}
+                    className={`w-4 h-4 rounded-sm border ${
+                      active
+                        ? 'bg-[#006bd6] border-[#0052a3]'
+                        : 'bg-white border-[#e0e4eb] hover:border-[#a8b1c2]'
+                    }`}
+                  />
+                );
+              }
+            )}
+          </div>
+          <div className="text-[12px] text-[#525f7a] mt-1.5 text-center">
+            {hover.r > 0 ? `${hover.r} × ${hover.c}` : 'Pick size'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Color & highlight pickers ────────────────────────────────────────────
 
 const TEXT_COLORS = [
@@ -1087,9 +1286,11 @@ function ColorGrid({
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+type BlockType = 'paragraph' | 'h1' | 'h2' | 'h3' | 'ul' | 'ol' | 'quote' | 'code';
+
 function detectBlockType(
   selection: ReturnType<typeof $getSelection>
-): 'paragraph' | 'h1' | 'h2' | 'h3' | 'ul' | 'ol' {
+): BlockType {
   if (!$isRangeSelection(selection)) return 'paragraph';
   const anchor = selection.anchor.getNode();
   // Walk up to find the closest block-level node.
@@ -1097,16 +1298,16 @@ function detectBlockType(
   while (node) {
     const type = node.getType();
     if (type === 'heading') {
-      // @ts-expect-error — HeadingNode has getTag()
-      const tag = node.getTag() as string;
+      const tag = (node as unknown as { getTag: () => string }).getTag();
       if (tag === 'h1' || tag === 'h2' || tag === 'h3') return tag;
     }
     if (type === 'list') {
-      // @ts-expect-error — ListNode has getListType()
-      const lt = node.getListType() as 'bullet' | 'number' | 'check';
+      const lt = (node as unknown as { getListType: () => string }).getListType();
       if (lt === 'bullet') return 'ul';
       if (lt === 'number') return 'ol';
     }
+    if (type === 'quote') return 'quote';
+    if (type === 'code') return 'code';
     node = node.getParent();
   }
   return 'paragraph';
