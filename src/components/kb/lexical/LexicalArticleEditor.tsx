@@ -10,6 +10,7 @@ import {
   UNDO_COMMAND,
   REDO_COMMAND,
   type LexicalEditor,
+  type TextNode,
 } from 'lexical';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
@@ -232,8 +233,8 @@ function InitialHtmlPlugin({ html }: { html: string }) {
         const blocks = nodes.map((n) => {
           // If the node is already a block (paragraph/heading/list etc.) leave
           // it. Otherwise wrap in a paragraph.
-          // @ts-expect-error — Lexical's type system doesn't expose a block flag.
-          if (typeof n.isInline !== 'function' || n.isInline()) {
+          const maybeInline = n as { isInline?: () => boolean };
+          if (typeof maybeInline.isInline !== 'function' || maybeInline.isInline()) {
             const p = $createParagraphNode();
             p.append(n);
             return p;
@@ -272,8 +273,8 @@ function ApiPlugin({ apiRef }: { apiRef: Ref<LexicalArticleEditorApi> }) {
             const dom = parser.parseFromString(html, 'text/html');
             const nodes = $generateNodesFromDOM(editor, dom);
             const blocks = nodes.map((n) => {
-              // @ts-expect-error — see InitialHtmlPlugin
-              if (typeof n.isInline !== 'function' || n.isInline()) {
+              const maybeInline = n as { isInline?: () => boolean };
+              if (typeof maybeInline.isInline !== 'function' || maybeInline.isInline()) {
                 const p = $createParagraphNode();
                 p.append(n);
                 return p;
@@ -387,22 +388,12 @@ function MentionsPlugin() {
   const onSelectOption = useCallback(
     (
       selectedOption: MentionTypeaheadOption,
-      nodeToReplace: ReturnType<typeof $getSelection> extends infer T
-        ? T extends null
-          ? null
-          : { replace: (n: LexicalEditor extends infer _U ? unknown : never) => void }
-        : never,
+      nodeToReplace: TextNode | null,
       closeMenu: () => void
     ) => {
       editor.update(() => {
         const mentionNode = $createMentionNode(selectedOption.name);
-        // The typeahead plugin gives us the trigger-text node to replace.
-        const node = nodeToReplace as unknown as {
-          replace?: (n: LexicalNodeLike) => void;
-        } | null;
-        if (node && typeof node.replace === 'function') {
-          node.replace(mentionNode);
-        }
+        nodeToReplace?.replace(mentionNode);
         mentionNode.select();
       });
       closeMenu();
@@ -450,9 +441,6 @@ function MentionsPlugin() {
     />
   );
 }
-
-// Local alias so the typing above stays compact.
-type LexicalNodeLike = ReturnType<typeof $createMentionNode>;
 
 // ── Toolbar ──────────────────────────────────────────────────────────────
 
