@@ -24,6 +24,7 @@ import {
   getFolderDepth,
   getFolder,
   getFolderDisplayStyle,
+  getUnit,
 } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
 
@@ -447,6 +448,8 @@ export function FolderTree({
     () => (showSubUnits ? getSubUnitRootFolders(unitId) : []),
     [unitId, version, showSubUnits]
   );
+  // Root units (no parent) can never receive parent-cascaded folders.
+  const hasParentUnit = !!getUnit(unitId)?.parentId;
 
   // The selected folder is only valid for "create sub-folder" if it belongs to
   // the current unit (own, not shared).
@@ -531,36 +534,40 @@ export function FolderTree({
         </div>
       </div>
 
-      <div className="border-t border-[#edeff3]" />
-
-      {/* From parent units (cascade down from ancestor units) */}
-      <div className="flex flex-col shrink-0">
-        <div className="px-3 pt-3 pb-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[#697a9b]">
-            From parent units
-          </span>
-        </div>
-        <div className="flex flex-col px-1.5 pb-3 overflow-y-auto">
-          {sharedFolders.length === 0 ? (
-            <div className="px-2 py-2 text-[12px] text-[#697a9b] italic">
-              Nothing from parent units yet
+      {/* From parent units (cascade down from ancestor units). Hidden entirely
+          for root units since nothing can cascade down to them. */}
+      {hasParentUnit && (
+        <>
+          <div className="border-t border-[#edeff3]" />
+          <div className="flex flex-col shrink-0">
+            <div className="px-3 pt-3 pb-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-[#697a9b]">
+                From parent units
+              </span>
             </div>
-          ) : (
-            sharedFolders.map((folder) => (
-              <FolderNode
-                key={folder.id}
-                folder={folder}
-                viewingUnitId={unitId}
-                selectedFolderId={selectedFolderId}
-                onSelect={onSelectFolder}
-                depth={0}
-                isShared
-                showArchived={false}
-              />
-            ))
-          )}
-        </div>
-      </div>
+            <div className="flex flex-col px-1.5 pb-3 overflow-y-auto">
+              {sharedFolders.length === 0 ? (
+                <div className="px-2 py-2 text-[12px] text-[#697a9b] italic">
+                  Nothing from parent units yet
+                </div>
+              ) : (
+                sharedFolders.map((folder) => (
+                  <FolderNode
+                    key={folder.id}
+                    folder={folder}
+                    viewingUnitId={unitId}
+                    selectedFolderId={selectedFolderId}
+                    onSelect={onSelectFolder}
+                    depth={0}
+                    isShared
+                    showArchived={false}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* From sub-units (toggle-driven) */}
       {showSubUnits && (
