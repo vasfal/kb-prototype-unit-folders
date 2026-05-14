@@ -80,64 +80,50 @@ export function EntityModal({
           {/* Main content */}
           <div className="flex-1 min-w-0 overflow-y-auto">{children}</div>
 
-          {/* Right panel — open state with tab nav */}
+          {/* Expanded panel content (left of the icon strip) */}
           {panels.length > 0 && activePanel && (
             <div className="w-[320px] shrink-0 border-l border-[#edeff3] bg-white flex flex-col">
-              <div className="flex items-center justify-between border-b border-[#edeff3] shrink-0 pr-2">
-                <div className="flex">
-                  {panels.map((p) => {
-                    const isActive = p.id === activePanel.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setActive(p.id)}
-                        className={`flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium border-b-2 -mb-px ${
-                          isActive
-                            ? 'text-[#0052a3] border-[#006bd6]'
-                            : 'text-[#697a9b] border-transparent hover:text-[#1f242e]'
-                        }`}
-                      >
-                        <span className={isActive ? 'text-[#006bd6]' : 'text-[#697a9b]'}>
-                          {p.icon}
-                        </span>
-                        {p.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActive(null)}
-                  className="flex items-center justify-center p-1 rounded-md hover:bg-[#fafbfc] transition-colors"
-                  title="Close panel"
-                >
-                  <X className="w-3.5 h-3.5 text-[#525f7a]" />
-                </button>
+              <div className="flex items-center px-4 h-12 border-b border-[#edeff3] shrink-0">
+                <span className="text-[15px] font-medium text-[#1f242e]">
+                  {activePanel.label}
+                </span>
               </div>
               <div className="flex-1 overflow-y-auto">{activePanel.content}</div>
             </div>
           )}
 
-          {/* Right panel — collapsed icon strip */}
-          {panels.length > 0 && !activePanel && (
+          {/* Vertical icon strip — always visible. Click toggles the panel. */}
+          {panels.length > 0 && (
             <div className="shrink-0 border-l border-[#edeff3] bg-white flex flex-col items-center pt-3 gap-1.5 w-[68px]">
-              {panels.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setActive(p.id)}
-                  className="flex flex-col items-center gap-1 w-full cursor-pointer hover:bg-[#edeff3] rounded-md py-2 transition-colors"
-                  title={p.label}
-                >
-                  <div className="w-9 h-9 rounded-lg border border-[#e0e4eb] bg-white flex items-center justify-center text-[#525f7a]">
-                    {p.icon}
-                  </div>
-                  <span className="text-[10px] font-medium text-[#3d475c] leading-[14px] tracking-[-0.2px]">
-                    {p.label}
-                  </span>
-                </button>
-              ))}
+              {panels.map((p) => {
+                const isActive = p.id === activePanel?.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setActive(isActive ? null : p.id)}
+                    className="flex flex-col items-center gap-1 w-full cursor-pointer rounded-md py-2 transition-colors"
+                    title={p.label}
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors ${
+                        isActive
+                          ? 'bg-[#ebf5ff] border-[#b3d4f0] text-[#006bd6]'
+                          : 'bg-white border-[#e0e4eb] text-[#525f7a] hover:bg-[#fafbfc]'
+                      }`}
+                    >
+                      {p.icon}
+                    </div>
+                    <span
+                      className={`text-[10px] font-medium leading-[14px] tracking-[-0.2px] ${
+                        isActive ? 'text-[#0052a3]' : 'text-[#3d475c]'
+                      }`}
+                    >
+                      {p.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

@@ -83,7 +83,7 @@ function FolderHeaderMenu({
             item.disabled
               ? 'text-[#a8b1c2] cursor-not-allowed'
               : item.danger
-              ? 'text-[#d97706] hover:bg-[#fafbfc]'
+              ? 'text-red-600 hover:bg-[#fafbfc]'
               : 'text-[#1f242e] hover:bg-[#fafbfc]'
           }`}
         >
@@ -92,7 +92,7 @@ function FolderHeaderMenu({
               item.disabled
                 ? 'text-[#a8b1c2]'
                 : item.danger
-                ? 'text-[#d97706]'
+                ? 'text-red-600'
                 : 'text-[#697a9b]'
             }
           >

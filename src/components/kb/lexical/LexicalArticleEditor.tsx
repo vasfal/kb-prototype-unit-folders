@@ -5,6 +5,7 @@ import {
   $getSelection,
   $isRangeSelection,
   $createParagraphNode,
+  $getNearestNodeFromDOMNode,
   FORMAT_TEXT_COMMAND,
   FORMAT_ELEMENT_COMMAND,
   UNDO_COMMAND,
@@ -23,6 +24,7 @@ import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import {
   HorizontalRuleNode,
   $createHorizontalRuleNode,
+  $isHorizontalRuleNode,
 } from '@lexical/react/LexicalHorizontalRuleNode';
 import { $insertNodeToNearestRoot } from '@lexical/utils';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
@@ -131,7 +133,7 @@ const editorTheme = {
     'border-l-[3px] border-[#d0d5dd] pl-3 my-3 text-[#525f7a] italic',
   code:
     'block bg-[#f5f6f8] border border-[#edeff3] rounded-md px-3 py-2 my-3 font-mono text-[13px] leading-[20px] text-[#1f242e] whitespace-pre-wrap',
-  hr: 'my-4 border-0 border-t border-[#e0e4eb]',
+  hr: 'my-6 border-0 border-t border-[#e0e4eb]',
   table: 'border-collapse my-3 w-full',
   tableCell:
     'border border-[#e0e4eb] px-2 py-1.5 align-top min-w-[80px] text-[14px]',
@@ -204,6 +206,7 @@ export const LexicalArticleEditor = forwardRef(function LexicalArticleEditor(
       <MentionsPlugin />
       <SlashCommandsPlugin />
       <BlockHoverPlugin />
+      <HrHoverPlugin />
       <InitialHtmlPlugin html={initialHtml} />
       <ApiPlugin apiRef={ref} />
     </LexicalComposer>
@@ -512,31 +515,161 @@ function findEnclosingTable(node: unknown): { tableNode: NodeLike | null } {
   return { tableNode: null };
 }
 
+type PreviewMode =
+  | 'insert-row-above'
+  | 'insert-row-below'
+  | 'insert-col-left'
+  | 'insert-col-right'
+  | 'delete-row'
+  | 'delete-col'
+  | 'delete-table';
+
+/** Find the DOM cell sibling that should be highlighted for a given action.
+ *  For row ops returns all cells in the active row; for col ops returns the
+ *  whole column; for delete-table the entire table's cells. */
+function previewCells(
+  table: HTMLTableElement,
+  activeCell: HTMLTableCellElement,
+  mode: PreviewMode
+): HTMLElement[] {
+  if (mode === 'delete-table') {
+    return Array.from(table.querySelectorAll('th, td')) as HTMLElement[];
+  }
+  const row = activeCell.closest('tr');
+  if (!row) return [];
+  if (mode === 'insert-row-above' || mode === 'insert-row-below' || mode === 'delete-row') {
+    return Array.from(row.querySelectorAll('th, td')) as HTMLElement[];
+  }
+  // Column ops: same column position across every row.
+  const colIndex = Array.from(row.children).indexOf(activeCell);
+  if (colIndex < 0) return [];
+  const cells: HTMLElement[] = [];
+  table.querySelectorAll('tr').forEach((r) => {
+    const c = r.children[colIndex] as HTMLElement | undefined;
+    if (c) cells.push(c);
+  });
+  return cells;
+}
+
+/** Side of the cells where the insert marker should appear (a thick blue
+ *  border on that edge). Empty string for delete previews. */
+function previewEdge(mode: PreviewMode): 'top' | 'bottom' | 'left' | 'right' | '' {
+  switch (mode) {
+    case 'insert-row-above':
+      return 'top';
+    case 'insert-row-below':
+      return 'bottom';
+    case 'insert-col-left':
+      return 'left';
+    case 'insert-col-right':
+      return 'right';
+    default:
+      return '';
+  }
+}
+
 function TableActionsPlugin() {
   const [editor] = useLexicalComposerContext();
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [activeTableKey, setActiveTableKey] = useState<string | null>(null);
+  const [activeCellEl, setActiveCellEl] = useState<HTMLTableCellElement | null>(
+    null
+  );
+  const [activeTableEl, setActiveTableEl] = useState<HTMLTableElement | null>(
+    null
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const previewedRef = useRef<HTMLElement[]>([]);
 
-  // Track the selection and resolve the active table.
+  const clearPreview = useCallback(() => {
+    for (const el of previewedRef.current) {
+      el.style.backgroundColor = '';
+      el.style.boxShadow = '';
+    }
+    previewedRef.current = [];
+  }, []);
+
+  const showPreview = useCallback(
+    (mode: PreviewMode) => {
+      clearPreview();
+      const table = activeTableEl;
+      const cell = activeCellEl;
+      if (!table || !cell) return;
+      const cells = previewCells(table, cell, mode);
+      const isDelete = mode.startsWith('delete');
+      const bg = isDelete ? 'rgba(220, 38, 38, 0.08)' : 'rgba(0, 107, 214, 0.10)';
+      const edgeColor = isDelete ? '#dc2626' : '#006bd6';
+      const edge = previewEdge(mode);
+      for (const el of cells) {
+        el.style.backgroundColor = bg;
+        if (edge) {
+          // Inset box-shadow on the relevant side acts as a thick border
+          // without shifting layout.
+          const shadows = {
+            top: `inset 0 3px 0 0 ${edgeColor}`,
+            bottom: `inset 0 -3px 0 0 ${edgeColor}`,
+            left: `inset 3px 0 0 0 ${edgeColor}`,
+            right: `inset -3px 0 0 0 ${edgeColor}`,
+          } as const;
+          el.style.boxShadow = shadows[edge];
+        }
+        previewedRef.current.push(el);
+      }
+    },
+    [activeCellEl, activeTableEl, clearPreview]
+  );
+
+  // Track the selection and resolve the active table + cell DOM elements.
   useEffect(() => {
     return editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         const sel = $getSelection();
         if (!$isRangeSelection(sel)) {
           setActiveTableKey(null);
+          setActiveCellEl(null);
+          setActiveTableEl(null);
           return;
         }
         const { tableNode } = findEnclosingTable(sel.anchor.getNode());
         if (!tableNode) {
           setActiveTableKey(null);
+          setActiveCellEl(null);
+          setActiveTableEl(null);
           return;
         }
-        setActiveTableKey(tableNode.getKey?.() ?? null);
+        const key = tableNode.getKey?.() ?? null;
+        setActiveTableKey(key);
+        const tableEl = key
+          ? (editor.getElementByKey(key) as HTMLTableElement | null)
+          : null;
+        setActiveTableEl(tableEl);
+        // Walk up the DOM from the current selection's anchor element to the
+        // nearest TH/TD inside this table.
+        const domSel = window.getSelection();
+        const anchorNode = domSel?.anchorNode as Node | null;
+        if (anchorNode && tableEl) {
+          let el: HTMLElement | null =
+            anchorNode.nodeType === 1
+              ? (anchorNode as HTMLElement)
+              : anchorNode.parentElement;
+          while (el && el !== tableEl) {
+            if (el.tagName === 'TD' || el.tagName === 'TH') {
+              setActiveCellEl(el as HTMLTableCellElement);
+              break;
+            }
+            el = el.parentElement;
+          }
+        }
       });
     });
   }, [editor]);
+
+  // Clear preview when menu closes or table loses focus.
+  useEffect(() => {
+    if (!menuOpen) clearPreview();
+  }, [menuOpen, clearPreview]);
+  useEffect(() => clearPreview, [clearPreview]);
 
   // Position the floating button at the table's top-right corner.
   useEffect(() => {
@@ -618,15 +751,54 @@ function TableActionsPlugin() {
         <div
           ref={menuRef}
           className="absolute right-0 top-full mt-1 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[200px] z-[70]"
+          onMouseLeave={clearPreview}
         >
-          <TableMenuItem icon={Rows} label="Insert row above" onClick={insertRowAbove} />
-          <TableMenuItem icon={Rows} label="Insert row below" onClick={insertRowBelow} />
-          <TableMenuItem icon={Columns} label="Insert column left" onClick={insertColLeft} />
-          <TableMenuItem icon={Columns} label="Insert column right" onClick={insertColRight} />
+          <TableMenuItem
+            icon={Rows}
+            label="Insert row above"
+            onClick={insertRowAbove}
+            onHover={() => showPreview('insert-row-above')}
+          />
+          <TableMenuItem
+            icon={Rows}
+            label="Insert row below"
+            onClick={insertRowBelow}
+            onHover={() => showPreview('insert-row-below')}
+          />
+          <TableMenuItem
+            icon={Columns}
+            label="Insert column left"
+            onClick={insertColLeft}
+            onHover={() => showPreview('insert-col-left')}
+          />
+          <TableMenuItem
+            icon={Columns}
+            label="Insert column right"
+            onClick={insertColRight}
+            onHover={() => showPreview('insert-col-right')}
+          />
           <div className="my-1 border-t border-[#edeff3]" />
-          <TableMenuItem icon={Trash2} label="Delete row" onClick={deleteRow} danger />
-          <TableMenuItem icon={Trash2} label="Delete column" onClick={deleteCol} danger />
-          <TableMenuItem icon={Trash2} label="Delete table" onClick={deleteTable} danger />
+          <TableMenuItem
+            icon={Trash2}
+            label="Delete row"
+            onClick={deleteRow}
+            onHover={() => showPreview('delete-row')}
+            danger
+          />
+          <TableMenuItem
+            icon={Trash2}
+            label="Delete column"
+            onClick={deleteCol}
+            onHover={() => showPreview('delete-col')}
+            danger
+          />
+          <TableMenuItem
+            icon={Trash2}
+            label="Delete table"
+            onClick={deleteTable}
+            onHover={() => showPreview('delete-table')}
+            danger
+          />
         </div>
       )}
     </div>,
@@ -638,24 +810,27 @@ function TableMenuItem({
   icon: Icon,
   label,
   onClick,
+  onHover,
   danger,
 }: {
   icon: React.ElementType;
   label: string;
   onClick: () => void;
+  onHover?: () => void;
   danger?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={onHover}
       className={`flex items-center gap-2 w-full px-3 py-1.5 text-[13px] text-left ${
         danger
-          ? 'text-[#d97706] hover:bg-[#fafbfc]'
+          ? 'text-red-600 hover:bg-[#fafbfc]'
           : 'text-[#1f242e] hover:bg-[#fafbfc]'
       }`}
     >
-      <Icon className={`w-3.5 h-3.5 ${danger ? 'text-[#d97706]' : 'text-[#697a9b]'}`} />
+      <Icon className={`w-3.5 h-3.5 ${danger ? 'text-red-600' : 'text-[#697a9b]'}`} />
       {label}
     </button>
   );
@@ -749,50 +924,51 @@ function BlockHoverPlugin() {
   const blockRef = useRef<HTMLElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuActiveIndex, setMenuActiveIndex] = useState(0);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  // 'after' (Click) is default — Option/Alt-click flips to 'before'.
+  const insertModeRef = useRef<'before' | 'after'>('after');
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Document-level mousemove with an extended hover zone covers the gap
+  // between the editor's left edge and the "+" button (which sits ~28px
+  // outside). The button is vertically centered on the hovered block so it
+  // sits *beside* the content; clicking inserts below by default,
+  // Option-click inserts above (Notion-style).
   useEffect(() => {
     const root = editor.getRootElement();
     if (!root) return;
 
     const handleMove = (e: MouseEvent) => {
-      // Skip while the menu is open so the button doesn't drift away.
       if (menuOpen) return;
+      const rootRect = root.getBoundingClientRect();
+      const inZone =
+        e.clientX >= rootRect.left - 40 &&
+        e.clientX <= rootRect.right &&
+        e.clientY >= rootRect.top &&
+        e.clientY <= rootRect.bottom;
+      if (!inZone) {
+        setPos(null);
+        blockRef.current = null;
+        return;
+      }
       const blocks = Array.from(root.children) as HTMLElement[];
       const block = blocks.find((b) => {
         const r = b.getBoundingClientRect();
         return e.clientY >= r.top && e.clientY <= r.bottom;
       });
-      if (!block) {
-        setPos(null);
-        blockRef.current = null;
-        return;
-      }
+      if (!block) return; // keep last known position to avoid flicker in gaps
       const r = block.getBoundingClientRect();
-      const rootRect = root.getBoundingClientRect();
       blockRef.current = block;
       setPos({
+        // Vertically centered on the block.
         top: r.top + r.height / 2 - 12,
-        // Stick to the left edge of the editor, just outside the content
         left: rootRect.left - 28,
       });
     };
 
-    const handleLeave = (e: MouseEvent) => {
-      if (menuOpen) return;
-      // Allow the button itself to swallow the leave (it's outside root)
-      const related = e.relatedTarget as Node | null;
-      if (related && menuRef.current?.contains(related)) return;
-      setPos(null);
-      blockRef.current = null;
-    };
-
-    root.addEventListener('mousemove', handleMove);
-    root.addEventListener('mouseleave', handleLeave);
-    return () => {
-      root.removeEventListener('mousemove', handleMove);
-      root.removeEventListener('mouseleave', handleLeave);
-    };
+    document.addEventListener('mousemove', handleMove);
+    return () => document.removeEventListener('mousemove', handleMove);
   }, [editor, menuOpen]);
 
   // Close menu on outside click.
@@ -807,19 +983,40 @@ function BlockHoverPlugin() {
     return () => document.removeEventListener('mousedown', h);
   }, [menuOpen]);
 
-  const placeCursorInBlock = () => {
+  /** Pick handler for the "+" menu. The click that opens the menu does NOT
+   *  touch the document. Only when the user actually selects a block type do
+   *  we create a new empty paragraph at the targeted position and let the
+   *  block-menu item transform it. If the user dismisses the menu, nothing
+   *  is left behind. The insertion side (before vs. after the hovered block)
+   *  is taken from insertModeRef, set at click time. */
+  const handlePick = (item: import('./BlockMenu').BlockMenuItem) => {
+    setMenuOpen(false);
     const block = blockRef.current;
     if (!block) return;
-    // Position the native selection at the end of the hovered block, then
-    // hand off to Lexical via focus(). Items in the menu apply at the
-    // current selection.
-    const range = document.createRange();
-    range.selectNodeContents(block);
-    range.collapse(false);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    editor.focus();
+    const mode = insertModeRef.current;
+    editor.update(() => {
+      const node = $getNearestNodeFromDOMNode(block);
+      if (!node) return;
+      const root = $getRoot();
+      let target: unknown = node;
+      while (
+        (target as { getParent: () => unknown }).getParent &&
+        (target as { getParent: () => unknown }).getParent() !== root &&
+        (target as { getParent: () => unknown }).getParent() !== null
+      ) {
+        target = (target as { getParent: () => unknown }).getParent();
+      }
+      const newPara = $createParagraphNode();
+      if (mode === 'after') {
+        (target as { insertAfter: (n: unknown) => void }).insertAfter(newPara);
+      } else {
+        (target as { insertBefore: (n: unknown) => void }).insertBefore(newPara);
+      }
+      newPara.select();
+    });
+    // Apply the chosen block transformation in a follow-up update — React
+    // batches both into the same render so the user sees a single change.
+    item.apply(editor);
   };
 
   if (!pos || !editor.isEditable()) return null;
@@ -828,16 +1025,40 @@ function BlockHoverPlugin() {
     <div style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 50 }}>
       <button
         type="button"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          placeCursorInBlock();
-          setMenuOpen((p) => !p);
+        // Keep editor focus by preventing the default mousedown side-effects,
+        // then toggle on click. Click is fired after mousedown/mouseup, so
+        // by then the close-menu document listener (registered by the
+        // open-state effect) is in sync with the latest state.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation();
+          insertModeRef.current = e.altKey ? 'before' : 'after';
+          setTooltipOpen(false);
+          setMenuOpen((p) => {
+            if (!p) setMenuActiveIndex(0);
+            return !p;
+          });
         }}
+        onMouseEnter={() => {
+          if (!menuOpen) setTooltipOpen(true);
+        }}
+        onMouseLeave={() => setTooltipOpen(false)}
         className="flex items-center justify-center w-6 h-6 rounded-md text-[#697a9b] hover:bg-[#edeff3] hover:text-[#1f242e] transition-opacity opacity-60 hover:opacity-100"
-        title="Insert block"
       >
         <Plus className="w-4 h-4" />
       </button>
+      {tooltipOpen && !menuOpen && (
+        <div className="absolute left-0 top-full mt-1.5 z-[65] pointer-events-none px-2.5 py-2 bg-[#1f242e] text-white rounded-md shadow-[0px_4px_12px_rgba(31,36,46,0.2)] whitespace-nowrap">
+          <div className="text-[12px] leading-[16px]">
+            <span className="font-medium">Click</span>
+            <span className="text-[#a8b1c2]"> to add below</span>
+          </div>
+          <div className="text-[12px] leading-[16px] mt-0.5">
+            <span className="font-medium">Option-click</span>
+            <span className="text-[#a8b1c2]"> to add above</span>
+          </div>
+        </div>
+      )}
       {menuOpen && (
         <div
           ref={menuRef}
@@ -845,15 +1066,97 @@ function BlockHoverPlugin() {
         >
           <BlockMenuList
             items={BLOCK_MENU_ITEMS}
-            activeIndex={-1}
-            onPick={(item) => {
-              setMenuOpen(false);
-              item.apply(editor);
-            }}
+            activeIndex={menuActiveIndex}
+            onHover={setMenuActiveIndex}
+            onPick={handlePick}
           />
         </div>
       )}
     </div>,
+    document.body
+  );
+}
+
+const HR_HIT_TOLERANCE_PX = 12;
+
+function HrHoverPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const [pos, setPos] = useState<
+    { top: number; left: number; hrEl: HTMLElement } | null
+  >(null);
+
+  useEffect(() => {
+    const root = editor.getRootElement();
+    if (!root) return;
+
+    const handleMove = (e: MouseEvent) => {
+      // Keep showing while hovering the delete button itself.
+      const onBtn = (e.target as HTMLElement | null)?.closest(
+        '[data-kb-hr-delete]'
+      );
+      if (onBtn) return;
+
+      // Vertical proximity hit-test — the HR itself is only ~1px tall,
+      // so direct DOM hit is fragile. Treat any HR whose center is within
+      // HR_HIT_TOLERANCE_PX of the mouse Y (and horizontally inside its
+      // rect) as hovered.
+      const hrs = Array.from(root.querySelectorAll('hr')) as HTMLElement[];
+      const hr = hrs.find((h) => {
+        const r = h.getBoundingClientRect();
+        const cy = r.top + r.height / 2;
+        return (
+          Math.abs(e.clientY - cy) <= HR_HIT_TOLERANCE_PX &&
+          e.clientX >= r.left &&
+          e.clientX <= r.right
+        );
+      });
+      if (hr) {
+        const r = hr.getBoundingClientRect();
+        setPos({
+          top: r.top + r.height / 2 - 12,
+          left: r.right - 24,
+          hrEl: hr,
+        });
+        return;
+      }
+      setPos(null);
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    return () => document.removeEventListener('mousemove', handleMove);
+  }, [editor]);
+
+  const handleDelete = () => {
+    const hrEl = pos?.hrEl;
+    if (!hrEl) return;
+    editor.update(() => {
+      const node = $getNearestNodeFromDOMNode(hrEl);
+      let n: { remove: () => void; getParent: () => unknown } | null =
+        node as unknown as typeof n;
+      while (n) {
+        if ($isHorizontalRuleNode(n as unknown as never)) {
+          n.remove();
+          break;
+        }
+        n = (n as unknown as { getParent: () => typeof n }).getParent();
+      }
+    });
+    setPos(null);
+  };
+
+  if (!pos || !editor.isEditable()) return null;
+  return createPortal(
+    <button
+      type="button"
+      data-kb-hr-delete
+      onClick={handleDelete}
+      onMouseDown={(e) => e.preventDefault()}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 50 }}
+      className="flex items-center justify-center w-6 h-6 bg-white border border-[#e0e4eb] rounded-md shadow-[0px_1px_3px_rgba(31,36,46,0.08)] text-red-600 hover:bg-[#fef2f2]"
+      title="Delete divider"
+    >
+      <Trash2 className="w-3.5 h-3.5" />
+    </button>,
     document.body
   );
 }
