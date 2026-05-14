@@ -16,20 +16,23 @@ import {
 } from 'lucide-react';
 import type { BusinessUnit } from '@/types';
 
-const sidebarNavItems = [
-  { icon: Home, label: 'Home', active: false },
-  { icon: Mail, label: 'Inbox', active: false },
-  { icon: Search, label: 'Search', active: false },
-  { icon: Building2, label: 'Units', active: true },
-  { icon: Calendar, label: 'Calendar', active: false },
-  { icon: Box, label: 'Assets', active: false },
-  { icon: Users, label: 'Contacts', active: false },
+type NavKey = 'home' | 'inbox' | 'search' | 'units' | 'calendar' | 'assets' | 'contacts';
+
+const sidebarNavItems: { key: NavKey; icon: React.ElementType; label: string }[] = [
+  { key: 'home', icon: Home, label: 'Home' },
+  { key: 'inbox', icon: Mail, label: 'Inbox' },
+  { key: 'search', icon: Search, label: 'Search' },
+  { key: 'units', icon: Building2, label: 'Units' },
+  { key: 'calendar', icon: Calendar, label: 'Calendar' },
+  { key: 'assets', icon: Box, label: 'Assets' },
+  { key: 'contacts', icon: Users, label: 'Contacts' },
 ];
 
 interface UnitSidebarProps {
   unitTree: BusinessUnit;
   selectedUnitId: string;
   onSelectUnit: (unitId: string) => void;
+  onSelectHome?: () => void;
 }
 
 function UnitTreeItem({
@@ -99,7 +102,7 @@ function UnitTreeItem({
   );
 }
 
-export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit }: UnitSidebarProps) {
+export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit, onSelectHome }: UnitSidebarProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const ids = new Set<string>();
     function findAndExpand(unit: BusinessUnit, target: string): boolean {
@@ -149,19 +152,26 @@ export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit }: UnitSide
       <div className="flex flex-1 min-h-0">
         {/* Icon strip */}
         <div className="w-16 bg-[#fafbfc] border-r border-[#edeff3] flex flex-col items-center pt-3 gap-1">
-          {sidebarNavItems.map((item) => (
-            <div
-              key={item.label}
-              className={`flex flex-col items-center justify-center w-14 py-1.5 rounded-md cursor-pointer ${
-                item.active
-                  ? 'text-[#006bd6]'
-                  : 'text-[#697a9b] hover:text-[#525f7a] hover:bg-[#f5f6f8]'
-              }`}
-            >
-              <item.icon className="w-4 h-4" strokeWidth={item.active ? 2 : 1.5} />
-              <span className="text-[10px] mt-1 leading-tight">{item.label}</span>
-            </div>
-          ))}
+          {sidebarNavItems.map((item) => {
+            const isActive = item.key === 'units';
+            const handleClick =
+              item.key === 'home' ? onSelectHome : undefined;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={handleClick}
+                className={`flex flex-col items-center justify-center w-14 py-1.5 rounded-md cursor-pointer ${
+                  isActive
+                    ? 'text-[#006bd6]'
+                    : 'text-[#697a9b] hover:text-[#525f7a] hover:bg-[#f5f6f8]'
+                }`}
+              >
+                <item.icon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} />
+                <span className="text-[10px] mt-1 leading-tight">{item.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Unit tree panel */}

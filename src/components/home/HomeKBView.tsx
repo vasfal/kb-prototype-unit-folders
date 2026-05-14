@@ -1,50 +1,57 @@
-import { Fragment, useMemo, useState, useRef, useEffect } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  ChevronsUpDown,
+  Search,
+  Filter,
+  LayoutGrid,
+  List,
   FolderClosed,
   Lock,
   MoreHorizontal,
+  ChevronsUpDown,
+  ChevronUp,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
-import type { KBArticle, ArticleStatus } from '@/types';
-import { ArticleActionsMenu } from './ArticleActionsMenu';
+import type { KBArticle, KBFolder, ArticleStatus } from '@/types';
 import {
-  applyArticleFilters,
-  isFiltersActive,
-  type ArticleFilters,
-} from './article-filters';
-import {
-  getAllVisibleArticles,
+  currentUserPositions,
+  findHomeViewingUnit,
   getFolder,
   getFolderPath,
+  getHomeArticles,
   getUnit,
 } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
-import { ArticleCard } from './ArticleCard';
-import { StatusBadge } from './StatusBadge';
-import { EmptyState } from './EmptyState';
+import {
+  applyArticleFilters,
+  DEFAULT_FILTERS,
+  hasNonSearchFilter,
+  isFiltersActive,
+  type ArticleFilters,
+} from '../kb/article-filters';
+import { FilterPopover, type FilterField } from '../kb/FilterPopover';
+import { FilterChips } from '../kb/FilterChips';
+import { ArticleCard } from '../kb/ArticleCard';
+import { ArticleActionsMenu } from '../kb/ArticleActionsMenu';
+import { StatusBadge } from '../kb/StatusBadge';
+import { EmptyState } from '../kb/EmptyState';
+import { FolderView } from '../kb/FolderView';
+import type { FolderAction } from '../kb/FolderTree';
+import { HomeFolderTree } from './HomeFolderTree';
 
-interface AllArticlesViewProps {
-  viewingUnitId: string;
-  showArchived: boolean;
-  showSubUnits: boolean;
-  viewMode: 'grid' | 'list';
-  /** Search query lifted from the toolbar; filters by article title. */
-  search: string;
-  /** Status / owner / updated filters applied on top of the base query. */
-  filters: ArticleFilters;
+interface HomeKBViewProps {
   onArticleClick?: (article: KBArticle) => void;
-  onSelectFolder?: (folderId: string) => void;
   onArticleStatusChange?: (article: KBArticle, status: ArticleStatus) => void;
   onArticleMove?: (article: KBArticle) => void;
   onArticleDelete?: (article: KBArticle) => void;
+  onCreateArticle?: (folderId: string, unitId: string) => void;
+  onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
 }
 
-type GroupBy = 'none' | 'folder' | 'status' | 'owner';
+type View = 'folder' | 'all-articles';
 type SortKey = 'title' | 'folder' | 'unit' | 'status' | 'updated' | 'owner';
 type SortDir = 'asc' | 'desc';
+type GroupBy = 'none' | 'folder' | 'unit' | 'status' | 'owner';
 
 const statusOrder: Record<ArticleStatus, number> = {
   published: 0,
@@ -61,6 +68,7 @@ const statusLabel: Record<ArticleStatus, string> = {
 const groupLabel: Record<GroupBy, string> = {
   none: 'None',
   folder: 'Folder',
+  unit: 'Unit',
   status: 'Status',
   owner: 'Owner',
 };
@@ -89,14 +97,8 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diffDays / 365)}y ago`;
 }
 
-function folderPathString(folderId: string): string {
-  const path = getFolderPath(folderId);
-  return path.map((f) => f.name).join(' › ');
-}
-
 interface Row {
   article: KBArticle;
-  folderId: string;
   folderPath: string;
   unitName: string;
 }
@@ -104,12 +106,13 @@ interface Row {
 function buildRows(articles: KBArticle[]): Row[] {
   return articles.map((article) => {
     const folder = getFolder(article.folderId);
-    const folderId = folder?.id ?? article.folderId;
+    const folderPath = folder
+      ? getFolderPath(folder.id).map((f) => f.name).join(' › ')
+      : '—';
     const unit = getUnit(article.unitId);
     return {
       article,
-      folderId,
-      folderPath: folder ? folderPathString(folder.id) : '—',
+      folderPath,
       unitName: unit?.name ?? 'Unknown',
     };
   });
@@ -125,10 +128,7 @@ function compareRows(a: Row, b: Row, key: SortKey, dir: SortDir): number {
     case 'unit':
       return mult * a.unitName.localeCompare(b.unitName);
     case 'status':
-      return (
-        mult *
-        (statusOrder[a.article.status] - statusOrder[b.article.status])
-      );
+      return mult * (statusOrder[a.article.status] - statusOrder[b.article.status]);
     case 'updated':
       return (
         mult *
@@ -144,6 +144,8 @@ function groupKey(row: Row, by: GroupBy): string {
   switch (by) {
     case 'folder':
       return row.folderPath;
+    case 'unit':
+      return row.unitName;
     case 'status':
       return statusLabel[row.article.status];
     case 'owner':
@@ -151,17 +153,6 @@ function groupKey(row: Row, by: GroupBy): string {
     default:
       return '';
   }
-}
-
-function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
-  if (!active) {
-    return <ChevronsUpDown className="w-3 h-3 text-[#a8b1c2]" />;
-  }
-  return dir === 'asc' ? (
-    <ChevronUp className="w-3 h-3 text-[#525f7a]" />
-  ) : (
-    <ChevronDown className="w-3 h-3 text-[#525f7a]" />
-  );
 }
 
 function GroupByMenu({
@@ -181,7 +172,7 @@ function GroupByMenu({
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
-  const items: GroupBy[] = ['none', 'folder', 'status', 'owner'];
+  const items: GroupBy[] = ['none', 'folder', 'unit', 'status', 'owner'];
   return (
     <div
       ref={ref}
@@ -206,6 +197,15 @@ function GroupByMenu({
         </button>
       ))}
     </div>
+  );
+}
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <ChevronsUpDown className="w-3 h-3 text-[#a8b1c2]" />;
+  return dir === 'asc' ? (
+    <ChevronUp className="w-3 h-3 text-[#525f7a]" />
+  ) : (
+    <ChevronDown className="w-3 h-3 text-[#525f7a]" />
   );
 }
 
@@ -252,14 +252,14 @@ function ArticleTableRow({
   onDelete,
 }: {
   row: Row;
-  onArticleClick?: (article: KBArticle) => void;
+  onArticleClick?: (a: KBArticle) => void;
   onSelectFolder?: (folderId: string) => void;
-  onStatusChange?: (article: KBArticle, status: ArticleStatus) => void;
-  onMove?: (article: KBArticle) => void;
-  onDelete?: (article: KBArticle) => void;
+  onStatusChange?: (a: KBArticle, s: ArticleStatus) => void;
+  onMove?: (a: KBArticle) => void;
+  onDelete?: (a: KBArticle) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { article, folderId, folderPath, unitName } = row;
+  const { article, folderPath, unitName } = row;
   const initials = article.owner.name
     .split(' ')
     .map((n) => n[0])
@@ -297,7 +297,7 @@ function ArticleTableRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onSelectFolder?.(folderId);
+            onSelectFolder?.(article.folderId);
           }}
           className="flex items-center gap-1 text-[13px] text-[#525f7a] hover:text-[#0052a3] min-w-0"
           title={folderPath}
@@ -307,9 +307,7 @@ function ArticleTableRow({
         </button>
       </td>
       <td className="py-2.5 pr-4">
-        <div className="flex items-center gap-1 text-[13px] text-[#525f7a]">
-          <span className="truncate">{unitName}</span>
-        </div>
+        <span className="text-[13px] text-[#525f7a] truncate">{unitName}</span>
       </td>
       <td className="py-2.5 pr-4">
         <StatusBadge status={article.status} showPublished />
@@ -358,51 +356,52 @@ function ArticleTableRow({
   );
 }
 
-export function AllArticlesView({
-  viewingUnitId,
-  showArchived,
-  showSubUnits,
-  viewMode,
-  search,
+function AllArticlesPanel({
   filters,
+  showArchived,
+  viewMode,
   onArticleClick,
   onSelectFolder,
-  onArticleStatusChange,
-  onArticleMove,
-  onArticleDelete,
-}: AllArticlesViewProps) {
+  onStatusChange,
+  onMove,
+  onDelete,
+}: {
+  filters: ArticleFilters;
+  showArchived: boolean;
+  viewMode: 'grid' | 'list';
+  onArticleClick?: (a: KBArticle) => void;
+  onSelectFolder?: (folderId: string) => void;
+  onStatusChange?: (a: KBArticle, s: ArticleStatus) => void;
+  onMove?: (a: KBArticle) => void;
+  onDelete?: (a: KBArticle) => void;
+}) {
   const version = useFolderVersion();
-  const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    new Set()
-  );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // Grid mode disables grouping (matches unit AllArticlesView).
+  const effectiveGroupBy: GroupBy = viewMode === 'grid' ? 'none' : groupBy;
 
   const articles = useMemo(
     () => {
-      const base = getAllVisibleArticles(viewingUnitId, {
+      const base = getHomeArticles({
         includeArchived: showArchived,
-        includeSubUnits: showSubUnits,
-        search,
+        search: filters.search,
       });
       return applyArticleFilters(base, filters);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewingUnitId, showArchived, showSubUnits, search, filters, version]
+    [filters, showArchived, version]
   );
 
   const rows = useMemo(() => {
     const built = buildRows(articles);
     built.sort((a, b) => compareRows(a, b, sortKey, sortDir));
     return built;
-    // getArticle dependency is stable; we re-build only when articles/sort change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articles, sortKey, sortDir]);
-
-  // Grid mode disables grouping (per spec).
-  const effectiveGroupBy: GroupBy = viewMode === 'grid' ? 'none' : groupBy;
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -422,7 +421,6 @@ export function AllArticlesView({
     });
   };
 
-  // Group rows preserving the current sort order.
   const groupedRows = useMemo(() => {
     if (effectiveGroupBy === 'none') return null;
     const map = new Map<string, Row[]>();
@@ -434,17 +432,23 @@ export function AllArticlesView({
     return Array.from(map.entries());
   }, [rows, effectiveGroupBy]);
 
-  const viewingUnit = getUnit(viewingUnitId);
+  const positionNames = currentUserPositions
+    .map((id) => getUnit(id)?.name ?? id)
+    .join(' · ');
   const totalLabel = `${rows.length} ${rows.length === 1 ? 'article' : 'articles'}`;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
-      {/* Header bar */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#edeff3] shrink-0">
-        <h1 className="text-[14px] font-medium text-[#1f242e]">
-          All articles{viewingUnit ? ` · ${viewingUnit.name}` : ''}
-        </h1>
+        <h1 className="text-[14px] font-medium text-[#1f242e]">My knowledge base</h1>
         <span className="text-[13px] text-[#697a9b]">{totalLabel}</span>
+        <span className="text-[13px] text-[#a8b1c2]">·</span>
+        <span
+          className="text-[13px] text-[#697a9b] truncate"
+          title="Aggregated from every unit where you hold a position"
+        >
+          {positionNames}
+        </span>
         <div className="flex-1" />
         {viewMode === 'list' && (
           <div className="relative">
@@ -472,7 +476,6 @@ export function AllArticlesView({
         )}
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-auto">
         {rows.length === 0 ? (
           isFiltersActive(filters) ? (
@@ -482,8 +485,8 @@ export function AllArticlesView({
             />
           ) : (
             <EmptyState
-              title="No articles yet"
-              description="Articles you can access in this unit and from shared content will appear here."
+              title="No articles accessible"
+              description="You'll see articles here from every unit where you hold a position."
             />
           )
         ) : viewMode === 'grid' ? (
@@ -493,9 +496,6 @@ export function AllArticlesView({
                 key={r.article.id}
                 article={r.article}
                 onClick={() => onArticleClick?.(r.article)}
-                onStatusChange={onArticleStatusChange}
-                onMove={onArticleMove}
-                onDelete={onArticleDelete}
               />
             ))}
           </div>
@@ -525,7 +525,7 @@ export function AllArticlesView({
                   activeKey={sortKey}
                   dir={sortDir}
                   onSort={handleSort}
-                  className="w-[140px] min-w-[140px]"
+                  className="w-[160px] min-w-[160px]"
                 />
                 <HeaderCell
                   label="Status"
@@ -585,9 +585,9 @@ export function AllArticlesView({
                               row={r}
                               onArticleClick={onArticleClick}
                               onSelectFolder={onSelectFolder}
-                              onStatusChange={onArticleStatusChange}
-                              onMove={onArticleMove}
-                              onDelete={onArticleDelete}
+                              onStatusChange={onStatusChange}
+                              onMove={onMove}
+                              onDelete={onDelete}
                             />
                           ))}
                       </Fragment>
@@ -599,13 +599,210 @@ export function AllArticlesView({
                       row={r}
                       onArticleClick={onArticleClick}
                       onSelectFolder={onSelectFolder}
-                      onStatusChange={onArticleStatusChange}
-                      onMove={onArticleMove}
-                      onDelete={onArticleDelete}
+                      onStatusChange={onStatusChange}
+                      onMove={onMove}
+                      onDelete={onDelete}
                     />
                   ))}
             </tbody>
           </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function HomeKBView({
+  onArticleClick,
+  onArticleStatusChange,
+  onArticleMove,
+  onArticleDelete,
+  onCreateArticle,
+  onFolderAction,
+}: HomeKBViewProps) {
+  const version = useFolderVersion();
+  const [filters, setFilters] = useState<ArticleFilters>(DEFAULT_FILTERS);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterFocus, setFilterFocus] = useState<FilterField | null>(null);
+  const filterButtonRef = useRef<HTMLDivElement>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [view, setView] = useState<View>('all-articles');
+
+  const filterActive = hasNonSearchFilter(filters);
+  const showArchived =
+    filters.statuses.size === 0 || filters.statuses.has('archived');
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        filterButtonRef.current &&
+        !filterButtonRef.current.contains(e.target as Node)
+      ) {
+        setFilterOpen(false);
+        setFilterFocus(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [filterOpen]);
+
+  // If the selected folder is removed (deleted from another path), fall back.
+  useEffect(() => {
+    if (view !== 'folder' || !selectedFolderId) return;
+    if (!getFolder(selectedFolderId)) {
+      setSelectedFolderId(null);
+      setView('all-articles');
+    }
+  }, [version, selectedFolderId, view]);
+
+  const handleSelectFolder = (folderId: string) => {
+    setSelectedFolderId(folderId);
+    setView('folder');
+  };
+  const handleSelectAllArticles = () => {
+    setView('all-articles');
+  };
+
+  const selectedFolder =
+    view === 'folder' && selectedFolderId ? getFolder(selectedFolderId) : null;
+  const viewingUnitForFolder = selectedFolder
+    ? findHomeViewingUnit(selectedFolder)
+    : currentUserPositions[0];
+
+  const toolbar = (
+    <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#edeff3] shrink-0">
+      <div className="flex items-center gap-3">
+        <div className="relative h-7">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[#697a9b]" />
+          <input
+            type="text"
+            value={filters.search}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, search: e.target.value }))
+            }
+            placeholder="Search"
+            className="h-7 pl-8 pr-3 text-[14px] border border-[#e0e4eb] rounded-lg w-[220px] bg-[#fafbfc] placeholder:text-[#697a9b] focus:outline-none focus:ring-1 focus:ring-[#006bd6] focus:border-[#006bd6]"
+          />
+        </div>
+        <div className="relative" ref={filterButtonRef}>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterFocus(null);
+              setFilterOpen((p) => !p);
+            }}
+            className={`relative flex items-center justify-center w-[34px] h-7 border rounded-lg transition-colors ${
+              filterOpen || filterActive
+                ? 'border-[#006bd6] bg-[#ebf5ff]'
+                : 'border-[#e0e4eb] hover:bg-gray-50'
+            }`}
+            title="Filter"
+          >
+            <Filter
+              className={`w-4 h-4 ${
+                filterOpen || filterActive ? 'text-[#006bd6]' : 'text-[#697a9b]'
+              }`}
+            />
+            {filterActive && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#006bd6] ring-2 ring-white" />
+            )}
+          </button>
+          {filterOpen && (
+            <FilterPopover
+              filters={filters}
+              onChange={setFilters}
+              initialField={filterFocus}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="flex items-center bg-[#edeff3] rounded-lg p-[2px] h-7">
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            className={`flex items-center justify-center w-6 h-6 rounded-md transition-all ${
+              viewMode === 'grid'
+                ? 'bg-white shadow-[0px_1px_3px_0px_rgba(31,36,46,0.1),0px_1px_2px_-1px_rgba(31,36,46,0.1)]'
+                : ''
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4 text-[#1f242e]" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`flex items-center justify-center w-6 h-6 rounded-md transition-all ${
+              viewMode === 'list'
+                ? 'bg-white shadow-[0px_1px_3px_0px_rgba(31,36,46,0.1),0px_1px_2px_-1px_rgba(31,36,46,0.1)]'
+                : ''
+            }`}
+          >
+            <List className="w-4 h-4 text-[#1f242e]" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      <HomeFolderTree
+        selectedFolderId={view === 'folder' ? selectedFolderId : null}
+        onSelectFolder={handleSelectFolder}
+        isAllArticlesActive={view === 'all-articles'}
+        onSelectAllArticles={handleSelectAllArticles}
+        onFolderAction={onFolderAction}
+      />
+
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {toolbar}
+        <FilterChips
+          filters={filters}
+          onChange={setFilters}
+          onEdit={(field) => {
+            setFilterFocus(field);
+            setFilterOpen(true);
+          }}
+        />
+
+        {view === 'all-articles' ? (
+          <AllArticlesPanel
+            filters={filters}
+            showArchived={showArchived}
+            viewMode={viewMode}
+            onArticleClick={onArticleClick}
+            onSelectFolder={handleSelectFolder}
+            onStatusChange={onArticleStatusChange}
+            onMove={onArticleMove}
+            onDelete={onArticleDelete}
+          />
+        ) : selectedFolder ? (
+          <FolderView
+            folderId={selectedFolder.id}
+            viewingUnitId={viewingUnitForFolder}
+            viewMode={viewMode}
+            showArchived={showArchived}
+            filters={filters}
+            onSelectFolder={handleSelectFolder}
+            onArticleClick={onArticleClick}
+            onCreateArticle={
+              onCreateArticle
+                ? () => onCreateArticle(selectedFolder.id, selectedFolder.unitId)
+                : undefined
+            }
+            onFolderAction={onFolderAction}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center bg-white">
+            <EmptyState
+              title="Select a folder"
+              description="Pick a folder from the left or open All articles."
+            />
+          </div>
         )}
       </div>
     </div>

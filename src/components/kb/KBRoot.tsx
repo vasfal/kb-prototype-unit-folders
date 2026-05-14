@@ -7,7 +7,7 @@ import {
   BookOpen,
   Plus,
 } from 'lucide-react';
-import type { KBArticle, KBFolder } from '@/types';
+import type { KBArticle, KBFolder, ArticleStatus } from '@/types';
 import {
   getOwnRootFolders,
   getSharedRootFolders,
@@ -20,6 +20,13 @@ import { FolderTree, type FolderAction } from './FolderTree';
 import { FolderView } from './FolderView';
 import { AllArticlesView } from './AllArticlesView';
 import { EmptyState } from './EmptyState';
+import {
+  DEFAULT_FILTERS,
+  hasNonSearchFilter,
+  type ArticleFilters,
+} from './article-filters';
+import { FilterPopover, type FilterField } from './FilterPopover';
+import { FilterChips } from './FilterChips';
 
 type ViewMode = 'folder' | 'all-articles';
 
@@ -30,6 +37,9 @@ interface KBRootProps {
   onCreateFolder?: () => void;
   onCreateSubFolder?: (parent: KBFolder | null) => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
+  onArticleStatusChange?: (article: KBArticle, status: ArticleStatus) => void;
+  onArticleMove?: (article: KBArticle) => void;
+  onArticleDelete?: (article: KBArticle) => void;
 }
 
 export function KBRoot({
@@ -39,17 +49,28 @@ export function KBRoot({
   onCreateFolder,
   onCreateSubFolder,
   onFolderAction,
+  onArticleStatusChange,
+  onArticleMove,
+  onArticleDelete,
 }: KBRootProps) {
-  // Archived items are visible by default; the filter popover lets users hide them.
-  const [hideArchived, setHideArchived] = useState(false);
   const [showSubUnits, setShowSubUnits] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filterFocus, setFilterFocus] = useState<FilterField | null>(null);
   const filterButtonRef = useRef<HTMLDivElement>(null);
-  const showArchived = !hideArchived;
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>('folder');
-  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<ArticleFilters>(DEFAULT_FILTERS);
+  const search = filters.search;
+  const filterActive = hasNonSearchFilter(filters);
+
+  const handleChipEdit = (field: FilterField) => {
+    setFilterFocus(field);
+    setFilterOpen(true);
+  };
+  // Archived articles are filtered post-query; keep folder traversal inclusive
+  // so a status filter that *includes* archived can still surface them.
+  const showArchived = filters.statuses.size === 0 || filters.statuses.has('archived');
 
   const version = useFolderVersion();
   const ownFolders = useMemo(() => getOwnRootFolders(unitId), [unitId, version]);
@@ -72,6 +93,7 @@ export function KBRoot({
         !filterButtonRef.current.contains(e.target as Node)
       ) {
         setFilterOpen(false);
+        setFilterFocus(null);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -121,7 +143,7 @@ export function KBRoot({
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
             placeholder="Search"
             className="h-7 pl-8 pr-3 text-[14px] border border-[#e0e4eb] rounded-lg w-[220px] bg-[#fafbfc] placeholder:text-[#697a9b] focus:outline-none focus:ring-1 focus:ring-[#006bd6] focus:border-[#006bd6]"
           />
@@ -129,9 +151,12 @@ export function KBRoot({
         <div className="relative" ref={filterButtonRef}>
           <button
             type="button"
-            onClick={() => setFilterOpen((p) => !p)}
+            onClick={() => {
+              setFilterFocus(null);
+              setFilterOpen((p) => !p);
+            }}
             className={`relative flex items-center justify-center w-[34px] h-7 border rounded-lg transition-colors ${
-              filterOpen || hideArchived
+              filterOpen || filterActive
                 ? 'border-[#006bd6] bg-[#ebf5ff]'
                 : 'border-[#e0e4eb] hover:bg-gray-50'
             }`}
@@ -139,36 +164,19 @@ export function KBRoot({
           >
             <Filter
               className={`w-4 h-4 ${
-                filterOpen || hideArchived ? 'text-[#006bd6]' : 'text-[#697a9b]'
+                filterOpen || filterActive ? 'text-[#006bd6]' : 'text-[#697a9b]'
               }`}
             />
-            {hideArchived && (
+            {filterActive && (
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#006bd6] ring-2 ring-white" />
             )}
           </button>
           {filterOpen && (
-            <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[200px]">
-              <button
-                type="button"
-                onClick={() => setHideArchived((p) => !p)}
-                className="flex items-center justify-between gap-3 w-full px-3 py-1.5 text-[13px] text-[#1f242e] hover:bg-[#fafbfc] text-left"
-              >
-                <span>Hide archived</span>
-                <span
-                  className={`relative inline-flex h-[16px] w-[28px] shrink-0 rounded-full transition-colors ${
-                    hideArchived ? 'bg-[#006bd6]' : 'bg-[#c1c7d0]'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-[12px] w-[12px] rounded-full bg-white shadow transform transition-transform ${
-                      hideArchived
-                        ? 'translate-x-[14px] translate-y-[2px]'
-                        : 'translate-x-[2px] translate-y-[2px]'
-                    }`}
-                  />
-                </span>
-              </button>
-            </div>
+            <FilterPopover
+              filters={filters}
+              onChange={setFilters}
+              initialField={filterFocus}
+            />
           )}
         </div>
       </div>
@@ -260,6 +268,11 @@ export function KBRoot({
 
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {toolbar}
+        <FilterChips
+          filters={filters}
+          onChange={setFilters}
+          onEdit={handleChipEdit}
+        />
 
         {view === 'all-articles' ? (
           <AllArticlesView
@@ -268,8 +281,12 @@ export function KBRoot({
             showSubUnits={showSubUnits}
             viewMode={viewMode}
             search={search}
+            filters={filters}
             onArticleClick={onArticleClick}
             onSelectFolder={handleSelectFolder}
+            onArticleStatusChange={onArticleStatusChange}
+            onArticleMove={onArticleMove}
+            onArticleDelete={onArticleDelete}
           />
         ) : !hasAnyContent ? (
           <div className="flex-1 flex items-center justify-center bg-white">
@@ -301,10 +318,14 @@ export function KBRoot({
             viewingUnitId={unitId}
             viewMode={viewMode}
             showArchived={showArchived}
+            filters={filters}
             onSelectFolder={handleSelectFolder}
             onArticleClick={onArticleClick}
             onCreateArticle={() => onCreateArticle?.(selectedFolderId)}
             onFolderAction={onFolderAction}
+            onArticleStatusChange={onArticleStatusChange}
+            onArticleMove={onArticleMove}
+            onArticleDelete={onArticleDelete}
           />
         )}
       </div>

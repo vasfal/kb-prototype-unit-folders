@@ -1,15 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, Folder, Globe2, Lock } from 'lucide-react';
+import type { Visibility } from '@/types';
+import { getMaxAllowedVisibility } from '@/data/mock-data';
 import { FOLDER_COLORS, DEFAULT_FOLDER_COLOR } from './folder-icons';
 
 export interface ParentPickerOption {
   id: string;
   label: string;
+  /** 1 = root folder, 2 = sub-folder. Drives indentation in the picker. */
+  depth: number;
 }
 
 interface CreateFolderDialogProps {
-  /** "create" creates a new folder; "rename" updates an existing one. */
-  mode: 'create' | 'rename';
+  /** "create" = new folder dialog; "edit" = rename and (for root) change color
+   *  of an existing folder. Visibility is handled by its own dedicated dialog
+   *  in both modes. */
+  mode: 'create' | 'edit';
   initialName?: string;
+  /** Initial color when editing — sets the active swatch in the picker. */
+  initialColor?: string;
+  /** Show color picker. Set true for root-folder create and root-folder edit;
+   *  false for sub-folders (color inherits from the root). */
+  showColorPicker?: boolean;
   /** When provided, a "Parent folder" dropdown is shown. Used for sub-folder creation. */
   parentPicker?: {
     options: ParentPickerOption[];
@@ -19,6 +31,7 @@ interface CreateFolderDialogProps {
     name: string;
     parentId: string | null;
     color?: string;
+    visibility?: Visibility;
   }) => void;
   onCancel: () => void;
 }
@@ -26,29 +39,69 @@ interface CreateFolderDialogProps {
 export function CreateFolderDialog({
   mode,
   initialName = '',
+  initialColor,
+  showColorPicker,
   parentPicker,
   onConfirm,
   onCancel,
 }: CreateFolderDialogProps) {
   const [name, setName] = useState(initialName);
   const [parentId, setParentId] = useState(parentPicker?.initialId ?? '');
-  const [color, setColor] = useState<string>(DEFAULT_FOLDER_COLOR);
+  const [color, setColor] = useState<string>(initialColor ?? DEFAULT_FOLDER_COLOR);
+  const [visibility, setVisibility] = useState<Visibility>('unit_and_subunits');
   const [error, setError] = useState('');
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
+  const parentPickerRef = useRef<HTMLDivElement>(null);
 
-  const isRename = mode === 'rename';
+  // Constraint inherited from the parent chain. For a root folder (no parent
+  // picker) this is always "Public allowed". When the user picks a private
+  // parent for a sub-folder, Public is disabled here.
+  const parentMax = getMaxAllowedVisibility(parentId || null);
+  const publicLocked = parentMax === 'current_unit_only';
+
+  // If parent forces private, force visibility state down too.
+  useEffect(() => {
+    if (publicLocked && visibility === 'unit_and_subunits') {
+      setVisibility('current_unit_only');
+    }
+  }, [publicLocked, visibility]);
+
+  // Close the custom dropdown on outside click.
+  useEffect(() => {
+    if (!parentPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        parentPickerRef.current &&
+        !parentPickerRef.current.contains(e.target as Node)
+      ) {
+        setParentPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [parentPickerOpen]);
+
+  const selectedParent = parentPicker?.options.find((o) => o.id === parentId);
+
+  const isEdit = mode === 'edit';
   const isSubFolder = !!parentPicker;
-  const isRoot = !isRename && !isSubFolder;
-  const title = isRename
-    ? 'Rename folder'
+  const isRoot = !isEdit && !isSubFolder;
+  // Color picker is shown either when explicitly requested or for a new root
+  // folder (where the user picks the section color).
+  const renderColorPicker = showColorPicker ?? isRoot;
+  const title = isEdit
+    ? 'Edit folder'
     : isSubFolder
     ? 'Create sub-folder'
     : 'Create folder';
-  const description = isRename
-    ? 'Enter a new name for this folder.'
+  const description = isEdit
+    ? renderColorPicker
+      ? 'Rename the folder and pick a section color.'
+      : 'Rename the folder. Color is inherited from the top-level folder.'
     : isSubFolder
     ? 'Pick a parent folder and give the new sub-folder a name. The sub-folder inherits color from its top-level folder.'
     : 'Add a top-level folder to organize articles in this unit.';
-  const confirmLabel = isRename ? 'Rename' : 'Create';
+  const confirmLabel = isEdit ? 'Save' : 'Create';
 
   const handleSubmit = () => {
     const trimmed = name.trim();
@@ -64,21 +117,28 @@ export function CreateFolderDialog({
       setError('Please choose a parent folder.');
       return;
     }
-    if (isRename && trimmed === initialName) {
+    // In edit mode: skip submit if nothing changed (name + color both
+    // identical to initial values).
+    if (
+      isEdit &&
+      trimmed === initialName &&
+      (!renderColorPicker || color === initialColor)
+    ) {
       onCancel();
       return;
     }
     onConfirm({
       name: trimmed,
       parentId: isSubFolder ? parentId : null,
-      ...(isRoot ? { color } : {}),
+      ...(renderColorPicker ? { color } : {}),
+      ...(isEdit ? {} : { visibility }),
     });
   };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
-      <div className={`relative bg-white rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] ${isRoot ? 'w-[440px]' : 'w-[400px]'} overflow-hidden`}>
+      <div className={`relative bg-white rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] ${renderColorPicker ? 'w-[440px]' : 'w-[400px]'} overflow-hidden`}>
         <div className="px-5 pt-5 pb-3">
           <h3 className="text-[16px] font-medium text-[#1f242e] leading-[24px]">{title}</h3>
           <p className="text-[13px] text-[#697a9b] mt-1">{description}</p>
@@ -90,20 +150,64 @@ export function CreateFolderDialog({
               <label className="block text-[13px] text-[#3d475c] mb-1.5">
                 Parent folder
               </label>
-              <select
-                value={parentId}
-                onChange={(e) => {
-                  setParentId(e.target.value);
-                  setError('');
-                }}
-                className="w-full h-9 px-2 text-[14px] border border-[#e0e4eb] rounded-lg bg-white text-[#1f242e] focus:outline-none focus:ring-1 focus:ring-[#006bd6] focus:border-[#006bd6]"
-              >
-                {parentPicker.options.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <div className="relative" ref={parentPickerRef}>
+                <button
+                  type="button"
+                  onClick={() => setParentPickerOpen((p) => !p)}
+                  className={`w-full flex items-center justify-between h-9 pl-3 pr-2 text-[14px] border rounded-lg bg-white text-left ${
+                    parentPickerOpen
+                      ? 'border-[#006bd6] ring-1 ring-[#006bd6]'
+                      : 'border-[#e0e4eb] hover:bg-[#fafbfc]'
+                  } ${selectedParent ? 'text-[#1f242e]' : 'text-[#697a9b]'}`}
+                >
+                  <span className="truncate">
+                    {selectedParent?.label ?? 'Pick a folder'}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-[#697a9b] shrink-0 transition-transform ${
+                      parentPickerOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+                {parentPickerOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 max-h-[240px] overflow-y-auto">
+                    {parentPicker.options.length === 0 ? (
+                      <div className="px-3 py-2 text-[13px] text-[#697a9b] italic">
+                        No eligible folders.
+                      </div>
+                    ) : (
+                      parentPicker.options.map((opt) => {
+                        const active = opt.id === parentId;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setParentId(opt.id);
+                              setError('');
+                              setParentPickerOpen(false);
+                            }}
+                            className={`flex items-center gap-2 w-full text-left text-[13px] py-1.5 pr-3 ${
+                              active
+                                ? 'bg-[#ebf5ff] text-[#0052a3]'
+                                : 'text-[#1f242e] hover:bg-[#fafbfc]'
+                            }`}
+                            style={{ paddingLeft: 12 + (opt.depth - 1) * 16 }}
+                          >
+                            <Folder
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                active ? 'text-[#006bd6]' : 'text-[#697a9b]'
+                              }`}
+                              strokeWidth={1.75}
+                            />
+                            <span className="truncate">{opt.label}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -132,7 +236,31 @@ export function CreateFolderDialog({
 
           {error && <p className="text-[12px] text-red-500 -mt-1">{error}</p>}
 
-          {isRoot && (
+          {!isEdit && (
+            <div>
+              <label className="block text-[13px] text-[#3d475c] mb-1.5">Visibility</label>
+              <div className="grid grid-cols-2 gap-2">
+                <VisibilityChoice
+                  label="Public"
+                  description="Visible to this unit and sub-units."
+                  icon={<Globe2 className="w-4 h-4" />}
+                  active={visibility === 'unit_and_subunits'}
+                  disabled={publicLocked}
+                  disabledReason="Parent folder is private — sub-folders can't be more visible than their parent."
+                  onClick={() => setVisibility('unit_and_subunits')}
+                />
+                <VisibilityChoice
+                  label="Private"
+                  description="Only this unit can see it."
+                  icon={<Lock className="w-4 h-4" />}
+                  active={visibility === 'current_unit_only'}
+                  onClick={() => setVisibility('current_unit_only')}
+                />
+              </div>
+            </div>
+          )}
+
+          {renderColorPicker && (
             <div>
               <label className="block text-[13px] text-[#3d475c] mb-1.5">Color</label>
               <div className="flex flex-wrap gap-1.5">
@@ -176,5 +304,59 @@ export function CreateFolderDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+function VisibilityChoice({
+  label,
+  description,
+  icon,
+  active,
+  disabled,
+  disabledReason,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  active: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={disabled ? disabledReason : undefined}
+      className={`flex items-start gap-2 p-2.5 border rounded-lg text-left transition-colors ${
+        disabled
+          ? 'border-[#edeff3] bg-[#fafbfc] opacity-50 cursor-not-allowed'
+          : active
+          ? 'border-[#006bd6] bg-[#ebf5ff]'
+          : 'border-[#e0e4eb] hover:bg-[#fafbfc]'
+      }`}
+    >
+      <span
+        className={`mt-0.5 ${
+          disabled ? 'text-[#a8b1c2]' : active ? 'text-[#006bd6]' : 'text-[#697a9b]'
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="flex flex-col min-w-0">
+        <span
+          className={`text-[13px] font-medium leading-[18px] ${
+            disabled ? 'text-[#697a9b]' : active ? 'text-[#0052a3]' : 'text-[#1f242e]'
+          }`}
+        >
+          {label}
+        </span>
+        <span className="text-[11px] text-[#697a9b] leading-[14px]">
+          {disabled && disabledReason ? disabledReason : description}
+        </span>
+      </span>
+    </button>
   );
 }

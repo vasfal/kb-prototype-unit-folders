@@ -1,7 +1,9 @@
-import { FolderClosed, MoreHorizontal } from 'lucide-react';
-import type { KBArticle } from '@/types';
+import { useState } from 'react';
+import { FolderClosed, Lock, MoreHorizontal } from 'lucide-react';
+import type { KBArticle, ArticleStatus } from '@/types';
 import { getUnit } from '@/data/mock-data';
 import { StatusBadge } from './StatusBadge';
+import { ArticleActionsMenu } from './ArticleActionsMenu';
 
 function timeAgo(iso: string): string {
   const now = new Date();
@@ -31,10 +33,20 @@ function getAvatarColor(name: string): string {
 interface ArticleCardProps {
   article: KBArticle;
   onClick?: () => void;
+  onStatusChange?: (article: KBArticle, status: ArticleStatus) => void;
+  onMove?: (article: KBArticle) => void;
+  onDelete?: (article: KBArticle) => void;
 }
 
 /** Card view — used in grid mode */
-export function ArticleCard({ article, onClick }: ArticleCardProps) {
+export function ArticleCard({
+  article,
+  onClick,
+  onStatusChange,
+  onMove,
+  onDelete,
+}: ArticleCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const unit = getUnit(article.unitId);
   const initials = article.owner.name
     .split(' ')
@@ -42,24 +54,40 @@ export function ArticleCard({ article, onClick }: ArticleCardProps) {
     .join('')
     .slice(0, 2);
   const isInactive = article.status === 'draft' || article.status === 'archived';
+  const isPrivate = article.visibility === 'current_unit_only';
+  const hasActions = !!(onStatusChange || onMove || onDelete);
 
   return (
     <div
-      className="bg-white border border-[#edeff3] rounded-xl p-3 shadow-[0px_1px_2px_0px_rgba(31,36,46,0.05)] cursor-pointer hover:border-[#d0d5dd] transition-colors flex flex-col gap-1"
+      className="group relative bg-white border border-[#edeff3] rounded-xl p-3 shadow-[0px_1px_2px_0px_rgba(31,36,46,0.05)] cursor-pointer hover:border-[#d0d5dd] transition-colors flex flex-col gap-1"
       onClick={onClick}
     >
-      {/* Title */}
-      <p className={`text-[14px] font-medium leading-[20px] line-clamp-2 ${isInactive ? 'text-[#697a9b]' : 'text-[#1f242e]'}`}>
-        {article.title}
-      </p>
+      {/* Title + private indicator */}
+      <div className="flex items-start gap-1.5">
+        <p
+          className={`flex-1 text-[14px] font-medium leading-[20px] line-clamp-2 ${
+            isInactive ? 'text-[#697a9b]' : 'text-[#1f242e]'
+          }`}
+        >
+          {article.title}
+        </p>
+        {isPrivate && (
+          <span
+            title="Private — only this unit can see it"
+            className="shrink-0 flex items-center mt-0.5"
+          >
+            <Lock className="w-3.5 h-3.5 text-[#697a9b]" strokeWidth={2} />
+          </span>
+        )}
+      </div>
 
-      {/* Meta row: unit + status + time + avatar */}
+      {/* Meta row: unit + status + time + avatar + actions */}
       <div className="flex items-center justify-between mt-auto">
-        <div className="flex items-center gap-1 text-[12px] text-[#525f7a]">
-          <FolderClosed className="w-3 h-3 text-[#697a9b]" />
-          <span>{unit?.name ?? 'Unknown'}</span>
+        <div className="flex items-center gap-1 text-[12px] text-[#525f7a] min-w-0">
+          <FolderClosed className="w-3 h-3 text-[#697a9b] shrink-0" />
+          <span className="truncate">{unit?.name ?? 'Unknown'}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <StatusBadge status={article.status} />
           <span className="text-[12px] text-[#697a9b]">{timeAgo(article.updatedAt)}</span>
           <div
@@ -68,6 +96,36 @@ export function ArticleCard({ article, onClick }: ArticleCardProps) {
           >
             {initials}
           </div>
+          {hasActions && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((p) => !p);
+                }}
+                className={`flex items-center justify-center w-6 h-6 rounded-md hover:bg-[#edeff3] transition-colors ${
+                  menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+                title="Article actions"
+              >
+                <MoreHorizontal className="w-3.5 h-3.5 text-[#525f7a]" />
+              </button>
+              {menuOpen && (
+                <ArticleActionsMenu
+                  article={article}
+                  onClose={() => setMenuOpen(false)}
+                  onStatusChange={
+                    onStatusChange
+                      ? (status) => onStatusChange(article, status)
+                      : undefined
+                  }
+                  onMove={onMove ? () => onMove(article) : undefined}
+                  onDelete={onDelete ? () => onDelete(article) : undefined}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -75,7 +133,14 @@ export function ArticleCard({ article, onClick }: ArticleCardProps) {
 }
 
 /** Table row view — used in list mode, matching Jobs tab pattern */
-export function ArticleRow({ article, onClick }: ArticleCardProps) {
+export function ArticleRow({
+  article,
+  onClick,
+  onStatusChange,
+  onMove,
+  onDelete,
+}: ArticleCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const unit = getUnit(article.unitId);
   const initials = article.owner.name
     .split(' ')
@@ -83,17 +148,33 @@ export function ArticleRow({ article, onClick }: ArticleCardProps) {
     .join('')
     .slice(0, 2);
   const isInactive = article.status === 'draft' || article.status === 'archived';
+  const isPrivate = article.visibility === 'current_unit_only';
+  const hasActions = !!(onStatusChange || onMove || onDelete);
 
   return (
     <tr
       className="border-b border-[#edeff3] last:border-b-0 cursor-pointer hover:bg-[#fafbfc] transition-colors"
       onClick={onClick}
     >
-      {/* Article title */}
+      {/* Article title + private indicator */}
       <td className="py-2.5 pl-4 pr-4">
-        <span className={`text-[13px] leading-[20px] ${isInactive ? 'text-[#697a9b]' : 'text-[#1f242e]'}`}>
-          {article.title}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={`text-[13px] leading-[20px] truncate ${
+              isInactive ? 'text-[#697a9b]' : 'text-[#1f242e]'
+            }`}
+          >
+            {article.title}
+          </span>
+          {isPrivate && (
+            <span
+              title="Private — only this unit can see it"
+              className="shrink-0 flex items-center"
+            >
+              <Lock className="w-3.5 h-3.5 text-[#697a9b]" strokeWidth={2} />
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Unit */}
@@ -128,10 +209,35 @@ export function ArticleRow({ article, onClick }: ArticleCardProps) {
       </td>
 
       {/* Actions */}
-      <td className="py-2.5">
-        <button className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-[#edeff3] transition-colors">
-          <MoreHorizontal className="w-4 h-4 text-[#525f7a]" />
-        </button>
+      <td className="py-2.5 pr-2">
+        {hasActions && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((p) => !p);
+              }}
+              className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-[#edeff3] transition-colors"
+              title="Article actions"
+            >
+              <MoreHorizontal className="w-4 h-4 text-[#525f7a]" />
+            </button>
+            {menuOpen && (
+              <ArticleActionsMenu
+                article={article}
+                onClose={() => setMenuOpen(false)}
+                onStatusChange={
+                  onStatusChange
+                    ? (status) => onStatusChange(article, status)
+                    : undefined
+                }
+                onMove={onMove ? () => onMove(article) : undefined}
+                onDelete={onDelete ? () => onDelete(article) : undefined}
+              />
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );

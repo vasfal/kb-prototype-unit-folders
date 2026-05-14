@@ -1,39 +1,50 @@
 import { useState } from 'react';
 import { Globe2, Lock } from 'lucide-react';
-import type { KBFolder, Visibility } from '@/types';
-import { getMaxAllowedVisibility } from '@/data/mock-data';
+import type { KBArticle, Visibility } from '@/types';
+import { getFolder, getMaxAllowedVisibility } from '@/data/mock-data';
 
-interface ChangeVisibilityDialogProps {
-  folder: KBFolder;
+interface ChangeArticleVisibilityDialogProps {
+  article: KBArticle;
   onConfirm: (visibility: Visibility) => void;
   onCancel: () => void;
 }
 
-const options: { value: Visibility; label: string; description: string; icon: React.ReactNode }[] = [
+const options: {
+  value: Visibility;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}[] = [
   {
     value: 'unit_and_subunits',
     label: 'Public',
-    description: 'Shared with this unit and all sub-units. Parent units can browse it through "Show sub-units".',
+    description: 'Visible to this unit and all sub-units.',
     icon: <Globe2 className="w-4 h-4" />,
   },
   {
     value: 'current_unit_only',
     label: 'Private',
-    description: 'Only people in this unit can see it. Parent and sub-units have no access, even with "Show sub-units" on.',
+    description: 'Only people in this unit can see it.',
     icon: <Lock className="w-4 h-4" />,
   },
 ];
 
-export function ChangeVisibilityDialog({
-  folder,
+export function ChangeArticleVisibilityDialog({
+  article,
   onConfirm,
   onCancel,
-}: ChangeVisibilityDialogProps) {
-  const [selected, setSelected] = useState<Visibility>(folder.visibility);
-  const parentMax = getMaxAllowedVisibility(folder.parentFolderId);
-  const publicLocked = parentMax === 'current_unit_only';
-  const isCascading = selected !== folder.visibility;
-  const cascadeLabel = selected === 'current_unit_only' ? 'Private' : 'Public';
+}: ChangeArticleVisibilityDialogProps) {
+  const [selected, setSelected] = useState<Visibility>(article.visibility);
+
+  // Public option is locked if the folder chain (folder + ancestors) is
+  // private. Articles can never be more visible than their folder.
+  const folder = getFolder(article.folderId);
+  const folderEffectiveMax: Visibility = folder
+    ? folder.visibility === 'current_unit_only'
+      ? 'current_unit_only'
+      : getMaxAllowedVisibility(folder.parentFolderId)
+    : 'unit_and_subunits';
+  const publicLocked = folderEffectiveMax === 'current_unit_only';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -41,10 +52,10 @@ export function ChangeVisibilityDialog({
       <div className="relative bg-white rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] w-[440px] overflow-hidden">
         <div className="px-5 pt-5 pb-3">
           <h3 className="text-[16px] font-medium text-[#1f242e] leading-[24px]">
-            Change folder visibility
+            Change article visibility
           </h3>
           <p className="text-[13px] text-[#697a9b] mt-1">
-            Choose who can see "{folder.name}" and the articles inside it.
+            Choose who can see "{article.title}".
           </p>
         </div>
 
@@ -54,7 +65,7 @@ export function ChangeVisibilityDialog({
             const isPublic = opt.value === 'unit_and_subunits';
             const disabled = isPublic && publicLocked;
             const tooltip = disabled
-              ? 'Parent folder is private — this folder can\'t be more visible than its parent.'
+              ? "The folder (or its parent) is private — articles can't be more visible than the folder."
               : undefined;
             return (
               <button
@@ -114,11 +125,6 @@ export function ChangeVisibilityDialog({
               </button>
             );
           })}
-          {isCascading && (
-            <div className="mt-1 px-3 py-2 text-[12px] text-[#d97706] bg-[#fef3c7] border border-[#fcd34d] rounded-md">
-              All sub-folders and articles in this folder will also become {cascadeLabel}.
-            </div>
-          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[#edeff3]">
@@ -132,9 +138,9 @@ export function ChangeVisibilityDialog({
           <button
             type="button"
             onClick={() => onConfirm(selected)}
-            disabled={selected === folder.visibility}
+            disabled={selected === article.visibility}
             className={`h-8 px-3 text-[14px] font-medium rounded-lg ${
-              selected === folder.visibility
+              selected === article.visibility
                 ? 'text-[#697a9b] bg-[#edeff3] cursor-not-allowed'
                 : 'text-white bg-[#006bd6] hover:bg-[#0052a3]'
             }`}

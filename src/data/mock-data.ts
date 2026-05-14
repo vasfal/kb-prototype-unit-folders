@@ -120,6 +120,12 @@ export const unitTree: BusinessUnit = {
 /** The unit selected in the prototype by default */
 export const selectedUnitId = 'employo';
 
+/** The current user's positions — unit IDs where the user has a role.
+ *  For the prototype: one in Employo > Product > Design (deep, leaf),
+ *  one in EDU > Marketing (separate branch). Used by the Home scope to
+ *  aggregate KB content the user can access across all their positions. */
+export const currentUserPositions: string[] = ['employo-design', 'edu-marketing'];
+
 /** Flat map of all units for quick lookups */
 export function flattenUnits(unit: BusinessUnit): BusinessUnit[] {
   const result: BusinessUnit[] = [unit];
@@ -335,6 +341,85 @@ export const allFolders: KBFolder[] = [
     createdAt: '2026-02-01T10:00:00Z',
     updatedBy: contacts.yuliana,
     updatedAt: '2026-03-20T10:00:00Z',
+  },
+
+  // ── Employo > Product > Design (own folders) ──
+  {
+    id: 'f-design-handbook',
+    unitId: 'employo-design',
+    parentFolderId: null,
+    name: 'Design team handbook',
+    color: '#7c3aed',
+    visibility: 'unit_and_subunits',
+    status: 'active',
+    sortOrder: 0,
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-01-08T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-12T10:00:00Z',
+  },
+  {
+    id: 'f-design-handbook-components',
+    unitId: 'employo-design',
+    parentFolderId: 'f-design-handbook',
+    name: 'Components library',
+    color: '#7c3aed',
+    visibility: 'unit_and_subunits',
+    status: 'active',
+    sortOrder: 0,
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-01-20T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-08T10:00:00Z',
+  },
+  {
+    id: 'f-design-handbook-components-forms',
+    unitId: 'employo-design',
+    parentFolderId: 'f-design-handbook-components',
+    name: 'Form patterns',
+    color: '#7c3aed',
+    visibility: 'unit_and_subunits',
+    status: 'active',
+    sortOrder: 0,
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-02-10T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-05T10:00:00Z',
+  },
+  {
+    id: 'f-design-confidential',
+    unitId: 'employo-design',
+    parentFolderId: null,
+    name: 'Hiring rubric (internal)',
+    color: '#dc2626',
+    visibility: 'current_unit_only',
+    status: 'active',
+    sortOrder: 1,
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-02-02T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-10T10:00:00Z',
+  },
+
+  // ── EDU > Marketing (own folders) ──
+  {
+    id: 'f-edu-mk-playbook',
+    unitId: 'edu-marketing',
+    parentFolderId: null,
+    name: 'Marketing playbook',
+    color: '#0891b2',
+    visibility: 'unit_and_subunits',
+    status: 'active',
+    sortOrder: 0,
+    owner: contacts.temari,
+    createdBy: contacts.temari,
+    createdAt: '2026-01-12T10:00:00Z',
+    updatedBy: contacts.temari,
+    updatedAt: '2026-04-18T10:00:00Z',
   },
 ];
 
@@ -679,6 +764,136 @@ export const allArticles: KBArticle[] = [
     updatedAt: '2026-02-15T10:00:00Z',
     publishedAt: '2025-07-02T10:00:00Z',
   },
+  // ── Employo > Product > Design > Design team handbook ──
+  {
+    id: 'a-design-1',
+    folderId: 'f-design-handbook',
+    unitId: 'employo-design',
+    title: 'Brand guidelines & design tokens',
+    content: `<h2>Brand foundations</h2><p>Everything you need to keep our visual language consistent across product and marketing surfaces.</p><h3>Logo usage</h3><ul><li>Always preserve minimum clear space equal to the height of the logo glyph.</li><li>Never recolor the wordmark outside of the approved palette.</li><li>Use the monochrome variant on photographic backgrounds.</li></ul><h3>Tokens</h3><p>Color, type, and spacing tokens live in the <strong>Design System</strong> Figma library. Engineers consume them via <code>@employo/design-tokens</code>.</p>`,
+    status: 'published',
+    visibility: 'unit_and_subunits',
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-01-10T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-12T10:00:00Z',
+    publishedAt: '2026-01-12T10:00:00Z',
+  },
+  {
+    id: 'a-design-2',
+    folderId: 'f-design-handbook',
+    unitId: 'employo-design',
+    title: 'Design critique rituals',
+    content: `<h2>Weekly crit</h2><p>Designers present in-progress work for structured feedback every Wednesday at 14:00. Bring two screens: where you started, where you are now.</p><h2>Feedback rubric</h2><ul><li>Does the design solve the user problem?</li><li>Is the visual hierarchy clear?</li><li>Does it match the design system?</li></ul>`,
+    status: 'draft',
+    visibility: 'unit_and_subunits',
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-04-05T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-18T15:00:00Z',
+    publishedAt: null,
+  },
+
+  // ── Employo > Product > Design > Design team handbook > Components library ──
+  {
+    id: 'a-design-comp-1',
+    folderId: 'f-design-handbook-components',
+    unitId: 'employo-design',
+    title: 'Button system overview',
+    content: `<h2>Variants</h2><p>The button system covers four variants — <strong>primary</strong>, <strong>secondary</strong>, <strong>ghost</strong>, <strong>destructive</strong> — and three sizes (sm / md / lg).</p><h2>States</h2><ul><li>Default · Hover · Focus · Active · Disabled · Loading</li></ul><h2>Usage rules</h2><p>Only one primary button per surface. Destructive variant requires a confirmation step.</p>`,
+    status: 'published',
+    visibility: 'unit_and_subunits',
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-01-22T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-08T10:00:00Z',
+    publishedAt: '2026-01-25T10:00:00Z',
+  },
+  {
+    id: 'a-design-comp-2',
+    folderId: 'f-design-handbook-components',
+    unitId: 'employo-design',
+    title: 'Color tokens',
+    content: `<h2>Brand colors</h2><p>Primary blue <code>#006bd6</code>, hover <code>#0052a3</code>. Use the semantic tokens (<code>color-action</code>, <code>color-text-primary</code>) in code — never hardcode hex values.</p><h2>Surface tokens</h2><ul><li><code>surface-bg</code> · <code>surface-elevated</code> · <code>surface-muted</code></li></ul>`,
+    status: 'draft',
+    visibility: 'unit_and_subunits',
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-03-15T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-08T10:00:00Z',
+    publishedAt: null,
+  },
+
+  // ── …Components library > Form patterns ──
+  {
+    id: 'a-design-comp-form-1',
+    folderId: 'f-design-handbook-components-forms',
+    unitId: 'employo-design',
+    title: 'Input field anatomy',
+    content: `<h2>Anatomy</h2><p>Label · Hint · Input · Validation message · Optional adornments (prefix / suffix / clear).</p><h2>Validation</h2><p>Inline error appears below the input on blur, not on every keystroke. Required fields use <code>aria-required</code> + visible asterisk.</p>`,
+    status: 'published',
+    visibility: 'unit_and_subunits',
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-02-12T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-05T10:00:00Z',
+    publishedAt: '2026-02-14T10:00:00Z',
+  },
+
+  // ── Employo > Product > Design > Hiring rubric (internal) ──
+  {
+    id: 'a-design-hiring-1',
+    folderId: 'f-design-confidential',
+    unitId: 'employo-design',
+    title: 'Senior designer scorecard',
+    content: `<h2>Scope</h2><p>Internal hiring rubric for Senior Designer roles. Confidential — only visible inside the Design unit.</p><h2>Criteria</h2><ul><li>Visual craft</li><li>Systems thinking</li><li>Cross-functional collaboration</li><li>Mentorship</li></ul>`,
+    status: 'published',
+    visibility: 'current_unit_only',
+    owner: contacts.anna,
+    createdBy: contacts.anna,
+    createdAt: '2026-02-05T10:00:00Z',
+    updatedBy: contacts.anna,
+    updatedAt: '2026-04-10T10:00:00Z',
+    publishedAt: '2026-02-06T10:00:00Z',
+  },
+
+  // ── EDU > Marketing > Marketing playbook ──
+  {
+    id: 'a-edu-mk-1',
+    folderId: 'f-edu-mk-playbook',
+    unitId: 'edu-marketing',
+    title: 'Campaign launch checklist',
+    content: `<h2>Pre-launch (T-7)</h2><ul><li>Final creative review with brand</li><li>Landing page QA across breakpoints</li><li>Analytics events implemented and verified</li></ul><h2>Launch day</h2><ul><li>Schedule social posts at 9:00, 12:00, 17:00</li><li>Monitor support inbox for unusual volume</li><li>Send launch summary to leadership at 18:00</li></ul>`,
+    status: 'published',
+    visibility: 'unit_and_subunits',
+    owner: contacts.temari,
+    createdBy: contacts.temari,
+    createdAt: '2026-01-15T10:00:00Z',
+    updatedBy: contacts.temari,
+    updatedAt: '2026-04-18T10:00:00Z',
+    publishedAt: '2026-01-16T10:00:00Z',
+  },
+  {
+    id: 'a-edu-mk-2',
+    folderId: 'f-edu-mk-playbook',
+    unitId: 'edu-marketing',
+    title: 'Course naming conventions',
+    content: `<h2>Format</h2><p>Each course title follows the pattern <strong>{Audience} · {Topic} · {Level}</strong>, e.g. "Engineers · Kubernetes · Intermediate".</p><h2>Length</h2><p>Keep titles under 60 characters so they fit the marketplace card without truncation.</p>`,
+    status: 'published',
+    visibility: 'unit_and_subunits',
+    owner: contacts.temari,
+    createdBy: contacts.temari,
+    createdAt: '2026-02-01T10:00:00Z',
+    updatedBy: contacts.temari,
+    updatedAt: '2026-03-22T10:00:00Z',
+    publishedAt: '2026-02-02T10:00:00Z',
+  },
+
   {
     id: 'a-21',
     folderId: 'f-dx-benefits',
@@ -952,17 +1167,133 @@ export function getAllVisibleArticles(
   return result;
 }
 
+/** Root folders the current user can reach across all their positions, split
+ *  into two buckets that mirror the unit-view sectioning:
+ *    - `own`     — folders owned by any position unit (the user's "My folders")
+ *    - `parent`  — folders owned by ancestor units, cascaded down via
+ *                  `unit_and_subunits`, deduped across positions.
+ *  No `sub-units` bucket on Home — that drill-down belongs to the specific
+ *  unit's view. */
+export function getHomeFolderSections(): {
+  own: KBFolder[];
+  parent: KBFolder[];
+} {
+  const seenOwn = new Set<string>();
+  const own: KBFolder[] = [];
+  const seenParent = new Set<string>();
+  const parent: KBFolder[] = [];
+  for (const posUnitId of currentUserPositions) {
+    for (const f of getOwnRootFolders(posUnitId)) {
+      if (!seenOwn.has(f.id)) {
+        seenOwn.add(f.id);
+        own.push(f);
+      }
+    }
+    for (const f of getSharedRootFolders(posUnitId)) {
+      if (!seenParent.has(f.id)) {
+        seenParent.add(f.id);
+        parent.push(f);
+      }
+    }
+  }
+  const byUnitThenName = (a: KBFolder, b: KBFolder) =>
+    a.unitId.localeCompare(b.unitId) || a.name.localeCompare(b.name);
+  own.sort(byUnitThenName);
+  parent.sort(byUnitThenName);
+  return { own, parent };
+}
+
+/** When rendering a folder inside the Home scope, FolderView needs a "viewing
+ *  unit" lens to filter articles correctly. Use the folder's owning unit if
+ *  the user has a position there; otherwise pick the first user position that
+ *  can see this folder (via `unit_and_subunits` cascade). */
+export function findHomeViewingUnit(folder: KBFolder): string {
+  if (currentUserPositions.includes(folder.unitId)) return folder.unitId;
+  for (const pos of currentUserPositions) {
+    if (folder.visibility === 'unit_and_subunits' &&
+        getDescendantUnitIds(folder.unitId).has(pos)) {
+      return pos;
+    }
+  }
+  return currentUserPositions[0];
+}
+
+/** Aggregated view across every unit where the current user holds a position.
+ *  Unions `getAllVisibleArticles` per position with de-duplication. Mirrors the
+ *  natural unit-view: includes own + parent-cascaded shared content, but does
+ *  NOT auto-expand into descendant sub-units (the user can still flip into a
+ *  specific unit to use that toggle). */
+export function getHomeArticles(opts?: {
+  includeArchived?: boolean;
+  search?: string;
+}): KBArticle[] {
+  const seen = new Set<string>();
+  const out: KBArticle[] = [];
+  for (const unitId of currentUserPositions) {
+    const articles = getAllVisibleArticles(unitId, {
+      includeArchived: !!opts?.includeArchived,
+      includeSubUnits: false,
+    });
+    for (const a of articles) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      out.push(a);
+    }
+  }
+  let result = out;
+  const q = opts?.search?.trim().toLowerCase();
+  if (q) result = result.filter((a) => a.title.toLowerCase().includes(q));
+  result.sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+  return result;
+}
+
 /** Folders that can serve as a parent for a NEW sub-folder in the given unit:
- *  must be own + active + at depth < 3 (so the child won't exceed max depth). */
+ *  must be own + active + at depth < 3 (so the child won't exceed max depth).
+ *  Returned in tree (DFS) order so the UI can render hierarchy via indentation. */
 export function getEligibleParentFolders(unitId: string): KBFolder[] {
-  return allFolders
-    .filter(
-      (f) =>
-        f.unitId === unitId &&
-        f.status === 'active' &&
-        getFolderDepth(f.id) < 3
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const result: KBFolder[] = [];
+  const walk = (folder: KBFolder) => {
+    if (folder.status !== 'active') return;
+    if (getFolderDepth(folder.id) >= 3) return;
+    result.push(folder);
+    getChildFolders(folder.id).forEach(walk);
+  };
+  getOwnRootFolders(unitId).forEach(walk);
+  return result;
+}
+
+/** Visibility a new (or edited) folder/article is allowed to have, given the
+ *  ancestor chain. Walks up from the given parent folder id; if any ancestor
+ *  is `current_unit_only`, the answer is `current_unit_only` (Public option
+ *  is forbidden — children can never be more visible than their parent).
+ *  Pass `null` to indicate "no parent" (root folder, unrestricted). */
+export function getMaxAllowedVisibility(
+  parentFolderId: string | null
+): KBFolder['visibility'] {
+  let id = parentFolderId;
+  while (id) {
+    const f = getFolder(id);
+    if (!f) break;
+    if (f.visibility === 'current_unit_only') return 'current_unit_only';
+    id = f.parentFolderId;
+  }
+  return 'unit_and_subunits';
+}
+
+/** Every own + active folder in the unit, in tree (DFS) order. Unlike
+ *  `getEligibleParentFolders`, this includes level-3 folders — articles can
+ *  live at any folder level. Used by the article-creation picker. */
+export function getOwnFoldersInTreeOrder(unitId: string): KBFolder[] {
+  const result: KBFolder[] = [];
+  const walk = (folder: KBFolder) => {
+    if (folder.status !== 'active') return;
+    result.push(folder);
+    getChildFolders(folder.id).forEach(walk);
+  };
+  getOwnRootFolders(unitId).forEach(walk);
+  return result;
 }
 
 // ============================================================
@@ -971,9 +1302,15 @@ export function getEligibleParentFolders(unitId: string): KBFolder[] {
 // state to localStorage so changes survive a page refresh.
 // ============================================================
 
-import type { ArticleStatus } from '@/types';
+import type { ArticleStatus, ArticleActivity, ArticleActivityKind } from '@/types';
 import { notifyFoldersChanged } from '@/state/folder-store';
-import { loadKbState, saveKbState, clearKbState } from '@/state/persistence';
+import {
+  loadKbState,
+  saveKbState,
+  clearKbState,
+  loadActivity,
+  saveActivity,
+} from '@/state/persistence';
 
 // Snapshot the seed data so "Reset" can restore it later.
 const defaultFolders: KBFolder[] = JSON.parse(JSON.stringify(allFolders));
@@ -990,13 +1327,139 @@ const defaultArticles: KBArticle[] = JSON.parse(JSON.stringify(allArticles));
   allArticles.push(...persisted.articles);
 })();
 
+// === Activity log ===========================================================
+// Append-only. Seeded once at module load from the current article set; user
+// actions add new entries. Persists separately from folders/articles.
+
+/** Stand-in for "the current user" in this single-user prototype. */
+const currentUser = contacts.oleksii;
+
+export const allActivity: ArticleActivity[] = [];
+
+function buildSeedActivity(): ArticleActivity[] {
+  const out: ArticleActivity[] = [];
+  let counter = 0;
+  for (const a of allArticles) {
+    const createdBy = a.createdBy ?? currentUser;
+    out.push({
+      id: `act-seed-${counter++}`,
+      articleId: a.id,
+      actor: createdBy,
+      timestamp: a.createdAt,
+      kind: 'created',
+      data: {},
+    });
+    if (a.publishedAt) {
+      out.push({
+        id: `act-seed-${counter++}`,
+        articleId: a.id,
+        actor: createdBy,
+        timestamp: a.publishedAt,
+        kind: 'status_changed',
+        data: { fromStatus: 'draft', toStatus: 'published' },
+      });
+    }
+    // Surface a recent edit if updatedAt is significantly newer than created.
+    if (
+      a.updatedAt &&
+      new Date(a.updatedAt).getTime() - new Date(a.createdAt).getTime() > 86_400_000
+    ) {
+      out.push({
+        id: `act-seed-${counter++}`,
+        articleId: a.id,
+        actor: a.updatedBy ?? currentUser,
+        timestamp: a.updatedAt,
+        kind: 'content_updated',
+        data: {},
+      });
+    }
+  }
+  // A couple of seeded comments for demo flavor.
+  const welcome = allArticles.find((a) => a.id === 'a-1');
+  if (welcome) {
+    out.push({
+      id: `act-seed-${counter++}`,
+      articleId: welcome.id,
+      actor: contacts.anna,
+      timestamp: '2026-04-02T11:30:00Z',
+      kind: 'comment',
+      data: {
+        comment:
+          "Thanks for putting this together — added a few links to the design wiki for newcomers.",
+      },
+    });
+    out.push({
+      id: `act-seed-${counter++}`,
+      articleId: welcome.id,
+      actor: contacts.dmytro,
+      timestamp: '2026-04-05T09:10:00Z',
+      kind: 'comment',
+      data: { comment: "Looks great. Should we mention the on-call rotation here too?" },
+    });
+  }
+  return out;
+}
+
+(() => {
+  const persisted = loadActivity();
+  if (persisted) {
+    allActivity.push(...persisted);
+  } else {
+    allActivity.push(...buildSeedActivity());
+  }
+})();
+
+const defaultActivity: ArticleActivity[] = JSON.parse(JSON.stringify(allActivity));
+
 function persist(): void {
   saveKbState(allFolders, allArticles);
+  saveActivity(allActivity);
 }
 
 function commit(): void {
   notifyFoldersChanged();
   persist();
+}
+
+function pushActivity(
+  articleId: string,
+  kind: ArticleActivityKind,
+  data: ArticleActivity['data']
+): void {
+  allActivity.push({
+    id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    articleId,
+    actor: currentUser,
+    timestamp: new Date().toISOString(),
+    kind,
+    data,
+  });
+}
+
+/** Activities for a given article, oldest first. */
+export function getActivity(articleId: string): ArticleActivity[] {
+  return allActivity
+    .filter((a) => a.articleId === articleId)
+    .sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+}
+
+/** Append a user-authored comment to an article's activity. */
+export function addComment(articleId: string, text: string): ArticleActivity | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+  const entry: ArticleActivity = {
+    id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    articleId,
+    actor: currentUser,
+    timestamp: new Date().toISOString(),
+    kind: 'comment',
+    data: { comment: trimmed },
+  };
+  allActivity.push(entry);
+  commit();
+  return entry;
 }
 
 // ── Folder mutations ──
@@ -1017,9 +1480,43 @@ export function renameFolder(folderId: string, name: string): void {
 export function setFolderVisibility(folderId: string, visibility: KBFolder['visibility']): void {
   const folder = getFolder(folderId);
   if (!folder) return;
+  // Enforce the invariant: a folder cannot be more visible than its parent.
+  const maxAllowed = getMaxAllowedVisibility(folder.parentFolderId);
+  if (visibility === 'unit_and_subunits' && maxAllowed === 'current_unit_only') {
+    return; // Caller's UI should prevent this; defensive no-op.
+  }
+  if (folder.visibility === visibility) return;
   folder.visibility = visibility;
   folder.updatedAt = new Date().toISOString();
+  // Cascade BOTH directions: children always sync with the new parent value.
+  // Going Private → child must be Private (invariant). Going Public → child
+  // also flips to Public per the product rule.
+  cascadeFolderVisibility(folderId, visibility);
   commit();
+}
+
+/** Internal: syncs every descendant folder + article inside `folderId` to the
+ *  given visibility. Does not commit; callers commit after their own state
+ *  changes. */
+function cascadeFolderVisibility(
+  folderId: string,
+  visibility: KBFolder['visibility']
+): void {
+  const now = new Date().toISOString();
+  const children = getChildFolders(folderId, { includeArchived: true });
+  for (const child of children) {
+    if (child.visibility !== visibility) {
+      child.visibility = visibility;
+      child.updatedAt = now;
+    }
+    cascadeFolderVisibility(child.id, visibility);
+  }
+  for (const a of allArticles) {
+    if (a.folderId === folderId && a.visibility !== visibility) {
+      a.visibility = visibility;
+      a.updatedAt = now;
+    }
+  }
 }
 
 /** Update a folder's color. Only meaningful on root folders since sub-folders
@@ -1122,13 +1619,21 @@ export function deleteFolderTree(folderId: string): void {
 
 // ── Article mutations ──
 
-/** Insert a new article or replace an existing one (matched by id). */
+/** Insert a new article or replace an existing one (matched by id). Records
+ *  a `created` activity for inserts and `content_updated` for content diffs
+ *  on replaces. Other field changes flow through the typed mutations and
+ *  log their own events; we don't double-log here. */
 export function upsertArticle(article: KBArticle): void {
   const idx = allArticles.findIndex((a) => a.id === article.id);
   if (idx >= 0) {
+    const prev = allArticles[idx];
     allArticles[idx] = article;
+    if (prev.content !== article.content) {
+      pushActivity(article.id, 'content_updated', {});
+    }
   } else {
     allArticles.push(article);
+    pushActivity(article.id, 'created', {});
   }
   commit();
 }
@@ -1136,12 +1641,18 @@ export function upsertArticle(article: KBArticle): void {
 export function setArticleStatus(id: string, status: ArticleStatus): KBArticle | undefined {
   const article = allArticles.find((a) => a.id === id);
   if (!article) return undefined;
+  const fromStatus = article.status;
+  if (fromStatus === status) return article;
   const now = new Date().toISOString();
   article.status = status;
   article.updatedAt = now;
   if (status === 'published' && !article.publishedAt) {
     article.publishedAt = now;
   }
+  pushActivity(article.id, 'status_changed', {
+    fromStatus,
+    toStatus: status,
+  });
   commit();
   return article;
 }
@@ -1149,8 +1660,101 @@ export function setArticleStatus(id: string, status: ArticleStatus): KBArticle |
 export function moveArticle(id: string, folderId: string): KBArticle | undefined {
   const article = allArticles.find((a) => a.id === id);
   if (!article) return undefined;
+  const folder = getFolder(folderId);
+  if (!folder) return article;
+  if (article.folderId === folderId) return article;
+  const prevFolder = getFolder(article.folderId);
   article.folderId = folderId;
+  // Article's owning unit follows its folder. In MVP folders live in a single
+  // unit so this stays consistent.
+  article.unitId = folder.unitId;
   article.updatedAt = new Date().toISOString();
+  // Enforce visibility invariant: if the new folder chain is private,
+  // demote the article to private too. (Promotions never happen on move.)
+  const folderEffectiveMax =
+    folder.visibility === 'current_unit_only'
+      ? 'current_unit_only'
+      : getMaxAllowedVisibility(folder.parentFolderId);
+  if (
+    folderEffectiveMax === 'current_unit_only' &&
+    article.visibility === 'unit_and_subunits'
+  ) {
+    article.visibility = 'current_unit_only';
+  }
+  pushActivity(article.id, 'folder_moved', {
+    fromFolder: prevFolder?.name ?? '—',
+    toFolder: folder.name,
+  });
+  commit();
+  return article;
+}
+
+/** Rename an article. Bumps updatedAt. */
+export function setArticleTitle(id: string, title: string): KBArticle | undefined {
+  const article = allArticles.find((a) => a.id === id);
+  if (!article) return undefined;
+  const fromTitle = article.title;
+  if (fromTitle === title) return article;
+  article.title = title;
+  article.updatedAt = new Date().toISOString();
+  pushActivity(article.id, 'title_renamed', { fromTitle, toTitle: title });
+  commit();
+  return article;
+}
+
+/** Reassign an article's owner. The new owner must be a known contact id. */
+export function setArticleOwner(id: string, ownerId: string): KBArticle | undefined {
+  const article = allArticles.find((a) => a.id === id);
+  if (!article) return undefined;
+  const owner = Object.values(contacts).find((c) => c.id === ownerId);
+  if (!owner) return article;
+  if (article.owner.id === ownerId) return article;
+  const fromOwner = article.owner.name;
+  article.owner = owner;
+  article.updatedAt = new Date().toISOString();
+  pushActivity(article.id, 'owner_changed', { fromOwner, toOwner: owner.name });
+  commit();
+  return article;
+}
+
+/** Change an article's visibility. Enforces the invariant: cannot be more
+ *  visible than its folder chain (Public is rejected if any ancestor is
+ *  Private). Callers' UI should disable Public; this is a defensive guard. */
+export function setArticleVisibility(
+  id: string,
+  visibility: KBArticle['visibility']
+): KBArticle | undefined {
+  const article = allArticles.find((a) => a.id === id);
+  if (!article) return undefined;
+  if (article.visibility === visibility) return article;
+  const folder = getFolder(article.folderId);
+  if (folder) {
+    const folderEffectiveMax =
+      folder.visibility === 'current_unit_only'
+        ? 'current_unit_only'
+        : getMaxAllowedVisibility(folder.parentFolderId);
+    if (
+      visibility === 'unit_and_subunits' &&
+      folderEffectiveMax === 'current_unit_only'
+    ) {
+      return article; // No-op: invariant violation.
+    }
+  }
+  article.visibility = visibility;
+  article.updatedAt = new Date().toISOString();
+  commit();
+  return article;
+}
+
+/** Update only the article's content body. Status is preserved — content
+ *  edits don't change status (per item-8 of the refactor list). */
+export function setArticleContent(id: string, content: string): KBArticle | undefined {
+  const article = allArticles.find((a) => a.id === id);
+  if (!article) return undefined;
+  if (article.content === content) return article;
+  article.content = content;
+  article.updatedAt = new Date().toISOString();
+  pushActivity(article.id, 'content_updated', {});
   commit();
   return article;
 }
@@ -1171,6 +1775,8 @@ export function resetKbState(): void {
   allFolders.push(...JSON.parse(JSON.stringify(defaultFolders)));
   allArticles.length = 0;
   allArticles.push(...JSON.parse(JSON.stringify(defaultArticles)));
+  allActivity.length = 0;
+  allActivity.push(...JSON.parse(JSON.stringify(defaultActivity)));
   clearKbState();
   notifyFoldersChanged();
 }

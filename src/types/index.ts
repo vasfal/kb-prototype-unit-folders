@@ -74,6 +74,40 @@ export interface KBAttachment {
   createdAt: string;
 }
 
+// === Activity / comments ===
+
+export type ArticleActivityKind =
+  | 'created'
+  | 'status_changed'
+  | 'owner_changed'
+  | 'folder_moved'
+  | 'title_renamed'
+  | 'content_updated'
+  | 'comment';
+
+/** Append-only log of things that happened to an article. Used by the
+ *  Activity sidebar — both system events and user-authored comments share
+ *  the same stream, distinguished by `kind`. */
+export interface ArticleActivity {
+  id: string;
+  articleId: string;
+  actor: Contact;
+  timestamp: string;
+  kind: ArticleActivityKind;
+  data: {
+    fromStatus?: ArticleStatus;
+    toStatus?: ArticleStatus;
+    fromOwner?: string;
+    toOwner?: string;
+    fromFolder?: string;
+    toFolder?: string;
+    fromTitle?: string;
+    toTitle?: string;
+    /** Body text for `kind: 'comment'`. */
+    comment?: string;
+  };
+}
+
 // === UI State types ===
 
 export type KBViewMode = 'folder-list' | 'article-view' | 'article-editor';

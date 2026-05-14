@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronRight,
   ChevronDown,
@@ -12,7 +13,6 @@ import {
   Eye,
   Files,
   Lock,
-  Palette,
   Trash2,
 } from 'lucide-react';
 import type { KBFolder } from '@/types';
@@ -29,10 +29,10 @@ import { useFolderVersion } from '@/state/folder-store';
 
 export type FolderAction =
   | 'create-sub'
-  | 'rename'
+  | 'edit'
   | 'change-visibility'
-  | 'change-color'
-  | 'delete';
+  | 'delete'
+  | 'restore';
 
 interface FolderTreeProps {
   unitId: string;
@@ -57,6 +57,9 @@ interface FolderNodeProps {
   isShared?: boolean;
   showArchived: boolean;
   defaultExpanded?: boolean;
+  /** When set, renders a small caption (owning unit name) after the folder
+   *  name. Only applied to the root row — recursive children get nothing. */
+  unitCaption?: string;
 }
 
 const MAX_FOLDER_DEPTH = 3;
@@ -69,7 +72,6 @@ export function buildFolderActions(folder: KBFolder): {
   danger?: boolean;
 }[] {
   const canAddSubfolder = getFolderDepth(folder.id) < MAX_FOLDER_DEPTH;
-  const isRoot = folder.parentFolderId === null;
   const items: {
     icon: React.ReactNode;
     label: string;
@@ -83,51 +85,96 @@ export function buildFolderActions(folder: KBFolder): {
       action: 'create-sub',
       disabled: !canAddSubfolder,
     },
-    { icon: <Pencil className="w-3.5 h-3.5" />, label: 'Rename', action: 'rename' },
-    { icon: <Eye className="w-3.5 h-3.5" />, label: 'Change visibility', action: 'change-visibility' },
+    { icon: <Pencil className="w-3.5 h-3.5" />, label: 'Edit', action: 'edit' },
+    {
+      icon: <Eye className="w-3.5 h-3.5" />,
+      label: 'Change visibility',
+      action: 'change-visibility',
+    },
+    {
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      label: 'Delete',
+      action: 'delete',
+      danger: true,
+    },
   ];
-  // Color is a root-folder property; sub-folders inherit it.
-  if (isRoot) {
-    items.push({
-      icon: <Palette className="w-3.5 h-3.5" />,
-      label: 'Change color',
-      action: 'change-color',
-    });
-  }
-  items.push({
-    icon: <Trash2 className="w-3.5 h-3.5" />,
-    label: 'Delete',
-    action: 'delete',
-    danger: true,
-  });
   return items;
+}
+
+/** Positions a popover next to its trigger button. Returns top/left in viewport
+ *  coords. Right-aligns the menu so its right edge matches the button's right
+ *  edge, clamped within the viewport. */
+function usePortalMenuPosition(
+  anchorRef: RefObject<HTMLElement | null>,
+  open: boolean,
+  width: number
+): { top: number; left: number } | null {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const compute = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const margin = 6;
+      const left = Math.max(
+        margin,
+        Math.min(rect.right - width, window.innerWidth - width - margin)
+      );
+      setPos({ top: rect.bottom + 4, left });
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('scroll', compute, true);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('scroll', compute, true);
+    };
+  }, [anchorRef, open, width]);
+  return pos;
 }
 
 function FolderActionsMenu({
   folder,
   onAction,
   onClose,
+  anchorRef,
 }: {
   folder: KBFolder;
   onAction: (action: FolderAction, folder: KBFolder) => void;
   onClose: () => void;
+  anchorRef: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const pos = usePortalMenuPosition(anchorRef, true, 200);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      const target = e.target as Node;
+      if (
+        ref.current &&
+        !ref.current.contains(target) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(target)
+      ) {
+        onClose();
+      }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   const items = buildFolderActions(folder);
 
-  return (
+  if (!pos) return null;
+  return createPortal(
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] z-20 py-1 min-w-[180px]"
+      style={{ top: pos.top, left: pos.left, width: 200 }}
+      className="fixed bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] z-[80] py-1"
     >
       {items.map((item) => (
         <button
@@ -161,11 +208,12 @@ function FolderActionsMenu({
           {item.label}
         </button>
       ))}
-    </div>
+    </div>,
+    document.body
   );
 }
 
-function FolderNode({
+export function FolderNode({
   folder,
   viewingUnitId,
   selectedFolderId,
@@ -175,10 +223,12 @@ function FolderNode({
   isShared,
   showArchived,
   defaultExpanded,
+  unitCaption,
 }: FolderNodeProps) {
   const children = getChildFolders(folder.id, { includeArchived: showArchived });
   const [expanded, setExpanded] = useState(!!defaultExpanded);
   const [menuOpen, setMenuOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const isSelected = selectedFolderId === folder.id;
   const isArchived = folder.status === 'archived';
   const isPrivate = folder.visibility === 'current_unit_only';
@@ -227,21 +277,32 @@ function FolderNode({
         >
           {folder.name}
         </span>
+        {unitCaption && (
+          <span className="text-[11px] text-[#697a9b] truncate shrink-0 max-w-[80px]">
+            {unitCaption}
+          </span>
+        )}
         {isArchived && (
           <span className="text-[10px] text-[#697a9b] uppercase tracking-wide shrink-0">
             archived
           </span>
         )}
         {!isArchived && isPrivate && (
-          <Lock
-            className="w-3.5 h-3.5 text-[#697a9b] shrink-0"
-            strokeWidth={2}
-            aria-label="Private"
-          />
+          <span
+            title="Private — only this unit can see it"
+            className="shrink-0 flex items-center"
+          >
+            <Lock
+              className="w-3.5 h-3.5 text-[#697a9b]"
+              strokeWidth={2}
+              aria-label="Private"
+            />
+          </span>
         )}
         {!isShared && onAction && (
-          <div className="relative shrink-0">
+          <div className="shrink-0">
             <button
+              ref={triggerRef}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -259,6 +320,7 @@ function FolderNode({
                 folder={folder}
                 onAction={onAction}
                 onClose={() => setMenuOpen(false)}
+                anchorRef={triggerRef}
               />
             )}
           </div>
@@ -291,21 +353,32 @@ function CreateFolderMenu({
   onCreateRoot,
   onCreateSub,
   onClose,
+  anchorRef,
 }: {
   selectedOwnFolder: KBFolder | null;
   onCreateRoot: () => void;
   onCreateSub: (parent: KBFolder | null) => void;
   onClose: () => void;
+  anchorRef: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const pos = usePortalMenuPosition(anchorRef, true, 220);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      const target = e.target as Node;
+      if (
+        ref.current &&
+        !ref.current.contains(target) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(target)
+      ) {
+        onClose();
+      }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   // Pre-select the currently selected folder only if it can serve as a parent;
   // otherwise the dialog's dropdown will fall back to the first eligible folder.
@@ -316,10 +389,12 @@ function CreateFolderMenu({
       ? selectedOwnFolder
       : null;
 
-  return (
+  if (!pos) return null;
+  return createPortal(
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] z-20 py-1 min-w-[220px]"
+      style={{ top: pos.top, left: pos.left, width: 220 }}
+      className="fixed bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] z-[80] py-1"
     >
       <button
         type="button"
@@ -343,7 +418,8 @@ function CreateFolderMenu({
         <FolderOpen className="w-3.5 h-3.5 text-[#697a9b]" />
         Create sub-folder
       </button>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -354,7 +430,6 @@ export function FolderTree({
   showArchived,
   showSubUnits,
   isAllArticlesActive,
-  allArticlesCount,
   onSelectAllArticles,
   onCreateRootFolder,
   onCreateSubFolder,
@@ -362,6 +437,7 @@ export function FolderTree({
 }: FolderTreeProps) {
   const version = useFolderVersion();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createTriggerRef = useRef<HTMLButtonElement>(null);
   const ownFolders = useMemo(
     () => getOwnRootFolders(unitId, { includeArchived: showArchived }),
     [unitId, version, showArchived]
@@ -411,8 +487,9 @@ export function FolderTree({
           <span className="text-[11px] font-medium uppercase tracking-wide text-[#697a9b]">
             Own folders
           </span>
-          <div className="relative">
+          <div>
             <button
+              ref={createTriggerRef}
               type="button"
               onClick={() => setCreateMenuOpen((p) => !p)}
               className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#edeff3]"
@@ -426,6 +503,7 @@ export function FolderTree({
                 onCreateRoot={() => onCreateRootFolder?.()}
                 onCreateSub={(parent) => onCreateSubFolder?.(parent)}
                 onClose={() => setCreateMenuOpen(false)}
+                anchorRef={createTriggerRef}
               />
             )}
           </div>
