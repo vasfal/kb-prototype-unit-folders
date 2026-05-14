@@ -22,8 +22,9 @@ import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import {
   HorizontalRuleNode,
-  INSERT_HORIZONTAL_RULE_COMMAND,
+  $createHorizontalRuleNode,
 } from '@lexical/react/LexicalHorizontalRuleNode';
+import { $insertNodeToNearestRoot } from '@lexical/utils';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
   HeadingNode,
@@ -37,6 +38,11 @@ import {
   TableCellNode,
   TableRowNode,
   INSERT_TABLE_COMMAND,
+  $isTableNode,
+  $insertTableRow__EXPERIMENTAL,
+  $insertTableColumn__EXPERIMENTAL,
+  $deleteTableRow__EXPERIMENTAL,
+  $deleteTableColumn__EXPERIMENTAL,
 } from '@lexical/table';
 import {
   ListNode,
@@ -61,6 +67,7 @@ import {
   Bold,
   ChevronDown,
   Code2,
+  Columns,
   Heading1,
   Heading2,
   Heading3,
@@ -71,18 +78,23 @@ import {
   List,
   ListOrdered,
   Minus,
+  MoreHorizontal,
   Paperclip,
+  Plus,
   Quote,
   Redo,
+  Rows,
   Smile,
   Strikethrough,
   Table as TableIcon,
+  Trash2,
   Underline as UnderlineIcon,
   Undo,
 } from 'lucide-react';
 import { ImageNode, $createImageNode } from './ImageNode';
 import { FileAttachmentNode, $createFileAttachmentNode } from './FileAttachmentNode';
 import { MentionNode, $createMentionNode } from './MentionNode';
+import { BLOCK_MENU_ITEMS, BlockMenuList } from './BlockMenu';
 import { contacts as allContacts } from '@/data/mock-data';
 
 export interface LexicalArticleEditorApi {
@@ -119,6 +131,7 @@ const editorTheme = {
     'border-l-[3px] border-[#d0d5dd] pl-3 my-3 text-[#525f7a] italic',
   code:
     'block bg-[#f5f6f8] border border-[#edeff3] rounded-md px-3 py-2 my-3 font-mono text-[13px] leading-[20px] text-[#1f242e] whitespace-pre-wrap',
+  hr: 'my-4 border-0 border-t border-[#e0e4eb]',
   table: 'border-collapse my-3 w-full',
   tableCell:
     'border border-[#e0e4eb] px-2 py-1.5 align-top min-w-[80px] text-[14px]',
@@ -187,7 +200,10 @@ export const LexicalArticleEditor = forwardRef(function LexicalArticleEditor(
       <ListPlugin />
       <LinkPlugin />
       <TablePlugin />
+      <TableActionsPlugin />
       <MentionsPlugin />
+      <SlashCommandsPlugin />
+      <BlockHoverPlugin />
       <InitialHtmlPlugin html={initialHtml} />
       <ApiPlugin apiRef={ref} />
     </LexicalComposer>
@@ -481,6 +497,367 @@ function MentionsPlugin() {
   );
 }
 
+// ── Table actions ────────────────────────────────────────────────────────
+
+type NodeLike = { getParent: () => NodeLike | null; getKey?: () => string; remove?: () => void };
+
+/** Walks up from the given node to find the enclosing TableNode. Returns
+ *  null when the selection isn't inside a table. */
+function findEnclosingTable(node: unknown): { tableNode: NodeLike | null } {
+  let n = node as NodeLike | null;
+  while (n) {
+    if ($isTableNode(n as unknown as never)) return { tableNode: n };
+    n = n.getParent();
+  }
+  return { tableNode: null };
+}
+
+function TableActionsPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [activeTableKey, setActiveTableKey] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Track the selection and resolve the active table.
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        const sel = $getSelection();
+        if (!$isRangeSelection(sel)) {
+          setActiveTableKey(null);
+          return;
+        }
+        const { tableNode } = findEnclosingTable(sel.anchor.getNode());
+        if (!tableNode) {
+          setActiveTableKey(null);
+          return;
+        }
+        setActiveTableKey(tableNode.getKey?.() ?? null);
+      });
+    });
+  }, [editor]);
+
+  // Position the floating button at the table's top-right corner.
+  useEffect(() => {
+    if (!activeTableKey) {
+      setPos(null);
+      return;
+    }
+    const compute = () => {
+      const el = editor.getElementByKey(activeTableKey);
+      if (!el) {
+        setPos(null);
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      setPos({ top: rect.top - 8, left: rect.right - 8 });
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('scroll', compute, true);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('scroll', compute, true);
+    };
+  }, [editor, activeTableKey]);
+
+  // Close menu on outside click.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const h = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [menuOpen]);
+
+  const run = (fn: () => void) => {
+    editor.update(() => {
+      const sel = $getSelection();
+      if (!$isRangeSelection(sel)) return;
+      fn();
+    });
+    setMenuOpen(false);
+  };
+
+  const insertRowAbove = () => run(() => $insertTableRow__EXPERIMENTAL(false));
+  const insertRowBelow = () => run(() => $insertTableRow__EXPERIMENTAL(true));
+  const insertColLeft = () => run(() => $insertTableColumn__EXPERIMENTAL(false));
+  const insertColRight = () => run(() => $insertTableColumn__EXPERIMENTAL(true));
+  const deleteRow = () => run(() => $deleteTableRow__EXPERIMENTAL());
+  const deleteCol = () => run(() => $deleteTableColumn__EXPERIMENTAL());
+  const deleteTable = () => {
+    editor.update(() => {
+      const sel = $getSelection();
+      if (!$isRangeSelection(sel)) return;
+      const { tableNode } = findEnclosingTable(sel.anchor.getNode());
+      tableNode?.remove?.();
+    });
+    setMenuOpen(false);
+  };
+
+  if (!pos || !activeTableKey) return null;
+
+  return createPortal(
+    <div
+      style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 60 }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        onClick={() => setMenuOpen((p) => !p)}
+        className="flex items-center justify-center w-6 h-6 bg-white border border-[#e0e4eb] rounded-md shadow-[0px_1px_3px_rgba(31,36,46,0.08)] hover:bg-[#fafbfc]"
+        title="Table actions"
+      >
+        <MoreHorizontal className="w-3.5 h-3.5 text-[#525f7a]" />
+      </button>
+      {menuOpen && (
+        <div
+          ref={menuRef}
+          className="absolute right-0 top-full mt-1 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[200px] z-[70]"
+        >
+          <TableMenuItem icon={Rows} label="Insert row above" onClick={insertRowAbove} />
+          <TableMenuItem icon={Rows} label="Insert row below" onClick={insertRowBelow} />
+          <TableMenuItem icon={Columns} label="Insert column left" onClick={insertColLeft} />
+          <TableMenuItem icon={Columns} label="Insert column right" onClick={insertColRight} />
+          <div className="my-1 border-t border-[#edeff3]" />
+          <TableMenuItem icon={Trash2} label="Delete row" onClick={deleteRow} danger />
+          <TableMenuItem icon={Trash2} label="Delete column" onClick={deleteCol} danger />
+          <TableMenuItem icon={Trash2} label="Delete table" onClick={deleteTable} danger />
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
+function TableMenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  danger,
+}: {
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 w-full px-3 py-1.5 text-[13px] text-left ${
+        danger
+          ? 'text-[#d97706] hover:bg-[#fafbfc]'
+          : 'text-[#1f242e] hover:bg-[#fafbfc]'
+      }`}
+    >
+      <Icon className={`w-3.5 h-3.5 ${danger ? 'text-[#d97706]' : 'text-[#697a9b]'}`} />
+      {label}
+    </button>
+  );
+}
+
+// ── Block menus: slash command + hover plus ───────────────────────────────
+
+class SlashOption extends MenuOption {
+  item: import('./BlockMenu').BlockMenuItem;
+  constructor(item: import('./BlockMenu').BlockMenuItem) {
+    super(item.key);
+    this.item = item;
+  }
+}
+
+function SlashCommandsPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const [queryString, setQueryString] = useState<string | null>(null);
+
+  const checkForTriggerMatch = useBasicTypeaheadTriggerMatch('/', {
+    minLength: 0,
+  });
+
+  const options = (() => {
+    const q = (queryString ?? '').toLowerCase();
+    const matched = !q
+      ? BLOCK_MENU_ITEMS
+      : BLOCK_MENU_ITEMS.filter(
+          (it) =>
+            it.label.toLowerCase().includes(q) ||
+            it.keywords.some((k) => k.includes(q))
+        );
+    return matched.map((it) => new SlashOption(it));
+  })();
+
+  const onSelectOption = useCallback(
+    (
+      option: SlashOption,
+      nodeToReplace: TextNode | null,
+      closeMenu: () => void
+    ) => {
+      editor.update(() => {
+        if (nodeToReplace) {
+          const text = nodeToReplace.getTextContent();
+          const slashIdx = text.lastIndexOf('/');
+          if (slashIdx === 0) {
+            nodeToReplace.remove();
+          } else if (slashIdx > 0) {
+            nodeToReplace.setTextContent(text.slice(0, slashIdx));
+          }
+        }
+      });
+      option.item.apply(editor);
+      closeMenu();
+    },
+    [editor]
+  );
+
+  return (
+    <LexicalTypeaheadMenuPlugin<SlashOption>
+      onQueryChange={setQueryString}
+      onSelectOption={onSelectOption}
+      triggerFn={checkForTriggerMatch}
+      options={options}
+      menuRenderFn={(
+        anchorElementRef,
+        { selectedIndex, selectOptionAndCleanUp, setHighlightedIndex }
+      ) => {
+        if (!anchorElementRef.current || options.length === 0) return null;
+        return createPortal(
+          <div className="absolute z-[60] bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[260px] max-h-[320px] overflow-y-auto">
+            <BlockMenuList
+              items={options.map((o) => o.item)}
+              activeIndex={selectedIndex ?? 0}
+              onPick={(item) => {
+                const opt = options.find((o) => o.item.key === item.key);
+                if (opt) selectOptionAndCleanUp(opt);
+              }}
+              onHover={(i) => setHighlightedIndex(i)}
+            />
+          </div>,
+          anchorElementRef.current
+        );
+      }}
+    />
+  );
+}
+
+function BlockHoverPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const blockRef = useRef<HTMLElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = editor.getRootElement();
+    if (!root) return;
+
+    const handleMove = (e: MouseEvent) => {
+      // Skip while the menu is open so the button doesn't drift away.
+      if (menuOpen) return;
+      const blocks = Array.from(root.children) as HTMLElement[];
+      const block = blocks.find((b) => {
+        const r = b.getBoundingClientRect();
+        return e.clientY >= r.top && e.clientY <= r.bottom;
+      });
+      if (!block) {
+        setPos(null);
+        blockRef.current = null;
+        return;
+      }
+      const r = block.getBoundingClientRect();
+      const rootRect = root.getBoundingClientRect();
+      blockRef.current = block;
+      setPos({
+        top: r.top + r.height / 2 - 12,
+        // Stick to the left edge of the editor, just outside the content
+        left: rootRect.left - 28,
+      });
+    };
+
+    const handleLeave = (e: MouseEvent) => {
+      if (menuOpen) return;
+      // Allow the button itself to swallow the leave (it's outside root)
+      const related = e.relatedTarget as Node | null;
+      if (related && menuRef.current?.contains(related)) return;
+      setPos(null);
+      blockRef.current = null;
+    };
+
+    root.addEventListener('mousemove', handleMove);
+    root.addEventListener('mouseleave', handleLeave);
+    return () => {
+      root.removeEventListener('mousemove', handleMove);
+      root.removeEventListener('mouseleave', handleLeave);
+    };
+  }, [editor, menuOpen]);
+
+  // Close menu on outside click.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const h = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [menuOpen]);
+
+  const placeCursorInBlock = () => {
+    const block = blockRef.current;
+    if (!block) return;
+    // Position the native selection at the end of the hovered block, then
+    // hand off to Lexical via focus(). Items in the menu apply at the
+    // current selection.
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    editor.focus();
+  };
+
+  if (!pos || !editor.isEditable()) return null;
+
+  return createPortal(
+    <div style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 50 }}>
+      <button
+        type="button"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          placeCursorInBlock();
+          setMenuOpen((p) => !p);
+        }}
+        className="flex items-center justify-center w-6 h-6 rounded-md text-[#697a9b] hover:bg-[#edeff3] hover:text-[#1f242e] transition-opacity opacity-60 hover:opacity-100"
+        title="Insert block"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+      {menuOpen && (
+        <div
+          ref={menuRef}
+          className="absolute left-0 top-full mt-1 z-[70] bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[260px] max-h-[320px] overflow-y-auto"
+        >
+          <BlockMenuList
+            items={BLOCK_MENU_ITEMS}
+            activeIndex={-1}
+            onPick={(item) => {
+              setMenuOpen(false);
+              item.apply(editor);
+            }}
+          />
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
 // ── Toolbar ──────────────────────────────────────────────────────────────
 
 function Toolbar() {
@@ -608,7 +985,12 @@ function Toolbar() {
   };
 
   const insertHorizontalRule = () => {
-    editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
+    editor.update(() => {
+      const sel = $getSelection();
+      if (!$isRangeSelection(sel)) return;
+      const hr = $createHorizontalRuleNode();
+      $insertNodeToNearestRoot(hr);
+    });
   };
 
   // Strike & underline are mutually exclusive — turning one on flips the
