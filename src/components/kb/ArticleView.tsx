@@ -21,6 +21,7 @@ import {
   type VersionSelection,
 } from './ArticleVersionsPanel';
 import { RestoreVersionDialog } from './RestoreVersionDialog';
+import { LeaveEditingDialog } from './LeaveEditingDialog';
 import {
   LexicalArticleEditor,
   type LexicalArticleEditorApi,
@@ -233,6 +234,8 @@ export function ArticleView({
   // dialog. Null when the dialog is closed.
   const [pendingRestoreVersion, setPendingRestoreVersion] =
     useState<number | null>(null);
+  // True while the leave-editing confirmation is on screen.
+  const [pendingLeave, setPendingLeave] = useState(false);
 
   // When opening a different article OR when the article's state shifts
   // (e.g. publish clears the draft), recompute the default selection so the
@@ -289,6 +292,18 @@ export function ArticleView({
   const handlePublishEdit = () => {
     const html = editorApiRef.current?.getHtml() ?? article.content;
     onPublishEdit?.(article, html);
+  };
+
+  // Intercept the modal's close while editing — in-session edits aren't
+  // committed until the user clicks Save, so a stray X / Esc / backdrop
+  // click would silently lose them. The dialog asks for explicit
+  // confirmation. View-mode close passes through unchanged.
+  const handleRequestClose = () => {
+    if (isEditing) {
+      setPendingLeave(true);
+      return;
+    }
+    onClose();
   };
 
   const handleDiscardDraft = () => {
@@ -371,7 +386,7 @@ export function ArticleView({
   return (
     <EntityModal
       title={modalTitle}
-      onClose={onClose}
+      onClose={handleRequestClose}
       rightPanels={rightPanels}
       activeRightPanelId={activeRightPanelId}
       onChangeActiveRightPanel={setActiveRightPanelId}
@@ -593,6 +608,15 @@ export function ArticleView({
           version={pendingRestoreVersion}
           onConfirm={confirmRestoreVersion}
           onCancel={() => setPendingRestoreVersion(null)}
+        />
+      )}
+      {pendingLeave && (
+        <LeaveEditingDialog
+          onConfirm={() => {
+            setPendingLeave(false);
+            onClose();
+          }}
+          onCancel={() => setPendingLeave(false)}
         />
       )}
     </EntityModal>
