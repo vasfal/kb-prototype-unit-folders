@@ -16,9 +16,26 @@ import {
   getUnit,
 } from '@/data/mock-data';
 
+/** Which version-snapshot the modal body is currently rendering. Drives the
+ *  contextual chip rendered next to the Status picker so the user always
+ *  knows whether they're looking at the live published version, an older
+ *  snapshot, or the pending draft. */
+export type ViewingMode = 'current' | 'older' | 'draft';
+
 interface ArticleSummaryFieldsProps {
   article: KBArticle;
   editable: boolean;
+  /** What the modal body is showing right now. */
+  viewing?: ViewingMode;
+  /** Version number when `viewing === 'older'`. */
+  viewingVersion?: number;
+  /** True when a draft overlay exists (independent of `viewing`). When
+   *  the user is on `current` and a draft exists, a clickable "Has
+   *  unpublished changes" chip surfaces it. */
+  hasDraft?: boolean;
+  /** Clicked on the contextual version chip — typically opens the
+   *  Versions sidebar. */
+  onVersionChipClick?: () => void;
   onStatusChange?: (status: ArticleStatus) => void;
   onOwnerChange?: (ownerId: string) => void;
   onFolderChange?: (folderId: string) => void;
@@ -55,6 +72,85 @@ function getAvatarColor(name: string): string {
   return avatarColors[Math.abs(hash) % avatarColors.length];
 }
 
+function renderVersionChip({
+  viewing,
+  viewingVersion,
+  hasDraft,
+  status,
+  onClick,
+}: {
+  viewing: ViewingMode;
+  viewingVersion?: number;
+  hasDraft: boolean;
+  status: ArticleStatus;
+  onClick?: () => void;
+}): React.ReactNode {
+  // Older or draft article-context chips are irrelevant on archived.
+  if (status === 'archived') return null;
+
+  // Looking at an older published snapshot.
+  if (viewing === 'older' && viewingVersion !== undefined) {
+    return (
+      <ChipButton onClick={onClick} variant="neutral" title="Switch version">
+        Viewing v{viewingVersion}
+      </ChipButton>
+    );
+  }
+
+  // Looking at the draft (unpublished changes) overlay.
+  if (viewing === 'draft' && hasDraft) {
+    return (
+      <ChipButton onClick={onClick} variant="amber" title="Switch version">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#d97706]" />
+        Unpublished changes
+      </ChipButton>
+    );
+  }
+
+  // Looking at the live published version, but a draft exists — surface
+  // it in a subdued style; the active "Unpublished changes" view uses the
+  // bolder amber variant.
+  if (viewing === 'current' && hasDraft && status === 'published') {
+    return (
+      <ChipButton onClick={onClick} variant="neutral" title="View unpublished changes">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#697a9b]" />
+        Has unpublished changes
+      </ChipButton>
+    );
+  }
+
+  return null;
+}
+
+function ChipButton({
+  children,
+  onClick,
+  variant,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant: 'amber' | 'neutral';
+  title?: string;
+}) {
+  const variantClass =
+    variant === 'amber'
+      ? 'bg-[#fef3c7] text-[#92400e] hover:bg-[#fde68a]'
+      : 'bg-[#edeff3] text-[#525f7a] hover:bg-[#e0e4eb]';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium rounded-md leading-none whitespace-nowrap shrink-0 transition-colors ${variantClass} ${
+        onClick ? 'cursor-pointer' : 'cursor-default'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function OwnerAvatar({ name }: { name: string }) {
   const initials = name.split(' ').map((n) => n[0]).join('').slice(0, 2);
   return (
@@ -70,6 +166,10 @@ function OwnerAvatar({ name }: { name: string }) {
 export function ArticleSummaryFields({
   article,
   editable,
+  viewing = 'current',
+  viewingVersion,
+  hasDraft,
+  onVersionChipClick,
   onStatusChange,
   onOwnerChange,
   onFolderChange,
@@ -77,17 +177,28 @@ export function ArticleSummaryFields({
   const unit = getUnit(article.unitId);
   const folder = getFolder(article.folderId);
 
+  const chip = renderVersionChip({
+    viewing,
+    viewingVersion,
+    hasDraft: !!hasDraft,
+    status: article.status,
+    onClick: onVersionChipClick,
+  });
+
   return (
     <div className="flex gap-6">
       <div className="flex-1 flex flex-col">
         <FieldRow icon={<Clock className="w-4 h-4" />} label="Status">
           {/* Status is editable even when the article is archived so users
               can restore via the picker. Other fields respect `editable`. */}
-          <StatusPicker
-            status={article.status}
-            editable
-            onChange={onStatusChange}
-          />
+          <div className="flex items-center gap-2">
+            <StatusPicker
+              status={article.status}
+              editable
+              onChange={onStatusChange}
+            />
+            {chip}
+          </div>
         </FieldRow>
         <FieldRow icon={<Building2 className="w-4 h-4" />} label="Unit">
           <span className="text-[14px] text-[#525f7a]">{unit?.name ?? 'Unknown'}</span>
@@ -159,7 +270,7 @@ function StatusPicker({
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
 
-  const badge = (
+  const badgeStatic = (
     <span
       className={`inline-flex items-center px-1.5 py-0.5 text-[13px] font-medium rounded-md leading-[16px] ${STATUS_STYLES[status]}`}
     >
@@ -167,24 +278,35 @@ function StatusPicker({
     </span>
   );
 
-  if (!editable || !onChange) return <span className="inline-block px-3">{badge}</span>;
+  if (!editable || !onChange)
+    return <span className="inline-block px-3">{badgeStatic}</span>;
 
+  // Filter targets to the meaningful transitions: a draft can't be
+  // archived directly, an archived article restores into a draft.
+  const availableOptions = STATUS_OPTIONS.filter((opt) => {
+    if (status === 'draft' && opt.value === 'archived') return false;
+    if (status === 'archived' && opt.value === 'published') return false;
+    return true;
+  });
+
+  // Editable: chevron sits inside the badge itself so the whole pill reads
+  // as a single interactive control.
   return (
     <div className="relative inline-block" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-[#fafbfc] ${
-          open ? 'bg-[#fafbfc]' : ''
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[13px] font-medium rounded-md leading-[16px] transition-colors ${STATUS_STYLES[status]} ${
+          open ? 'ring-2 ring-[#006bd6]/30' : 'hover:brightness-95'
         }`}
         title="Change status"
       >
-        {badge}
-        <ChevronDown className="w-3 h-3 text-[#697a9b]" />
+        {STATUS_LABELS[status]}
+        <ChevronDown className="w-3 h-3 opacity-75" />
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[140px]">
-          {STATUS_OPTIONS.map((opt) => (
+          {availableOptions.map((opt) => (
             <button
               key={opt.value}
               type="button"

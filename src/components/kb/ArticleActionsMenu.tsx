@@ -5,8 +5,8 @@ import {
   EyeOff,
   FolderInput,
   RotateCcw,
-  Send,
   Trash2,
+  Undo2,
 } from 'lucide-react';
 import type { KBArticle, ArticleStatus } from '@/types';
 
@@ -17,6 +17,9 @@ interface ArticleActionsMenuProps {
   onMove?: () => void;
   onDelete?: () => void;
   onChangeVisibility?: () => void;
+  /** Discard pending unpublished changes. Show in the menu only when a
+   *  draft is actually pending — caller controls availability. */
+  onDiscardDraft?: () => void;
   /** Tailwind positioning classes for the popover container. Defaults to
    *  right-aligned just below the trigger. */
   positionClassName?: string;
@@ -32,6 +35,7 @@ export function ArticleActionsMenu({
   onMove,
   onDelete,
   onChangeVisibility,
+  onDiscardDraft,
   positionClassName,
 }: ArticleActionsMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -51,20 +55,10 @@ export function ArticleActionsMenu({
     danger?: boolean;
   }[] = [];
 
-  if (article.status === 'draft') {
-    items.push({
-      icon: <Send className="w-4 h-4" />,
-      label: 'Publish',
-      onClick: () => {
-        onStatusChange?.('published');
-        onClose();
-      },
-    });
-  }
   if (article.status === 'published') {
     items.push({
       icon: <EyeOff className="w-4 h-4" />,
-      label: 'Unpublish',
+      label: 'Set as Draft',
       onClick: () => {
         onStatusChange?.('draft');
         onClose();
@@ -109,6 +103,21 @@ export function ArticleActionsMenu({
       },
     });
   }
+  if (
+    onDiscardDraft &&
+    article.draftContent !== null &&
+    article.status !== 'archived'
+  ) {
+    items.push({
+      icon: <Undo2 className="w-4 h-4" />,
+      label: 'Discard changes',
+      onClick: () => {
+        onDiscardDraft();
+        onClose();
+      },
+      danger: true,
+    });
+  }
   items.push({
     icon: <Trash2 className="w-4 h-4" />,
     label: 'Delete',
@@ -122,7 +131,7 @@ export function ArticleActionsMenu({
   return (
     <div
       ref={ref}
-      className={`absolute bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[160px] ${
+      className={`absolute bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 min-w-[220px] whitespace-nowrap ${
         positionClassName ?? 'right-0 top-full mt-1 z-[56]'
       }`}
     >

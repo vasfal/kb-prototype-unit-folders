@@ -312,7 +312,11 @@ function ArticleTableRow({
         </div>
       </td>
       <td className="py-2.5 pr-4">
-        <StatusBadge status={article.status} showPublished />
+        <StatusBadge
+          status={article.status}
+          showPublished
+          hasUnpublishedChanges={article.draftContent !== null}
+        />
       </td>
       <td className="py-2.5 pr-4">
         <span className="text-[13px] text-[#697a9b] whitespace-nowrap">

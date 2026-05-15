@@ -87,6 +87,28 @@ function eventSentence(a: ArticleActivity): React.ReactNode {
       );
     case 'content_updated':
       return <>{actor} updated the content</>;
+    case 'version_published':
+      if (a.data.fromVersion === 0) {
+        return (
+          <>
+            {actor} published version{' '}
+            <span className="font-medium text-[#1f242e]">v{a.data.toVersion}</span>
+          </>
+        );
+      }
+      return (
+        <>
+          {actor} published a new version{' '}
+          <span className="font-medium text-[#1f242e]">v{a.data.toVersion}</span>
+          {a.data.fromVersion !== undefined && (
+            <span className="text-[#697a9b]"> (was v{a.data.fromVersion})</span>
+          )}
+        </>
+      );
+    case 'draft_saved':
+      return <>{actor} saved unpublished changes</>;
+    case 'draft_discarded':
+      return <>{actor} discarded unpublished changes</>;
     default:
       return <>{actor} did something</>;
   }

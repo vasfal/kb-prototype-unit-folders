@@ -30,8 +30,8 @@ export function TopBar({ unitPath }: TopBarProps) {
           </div>
         ))}
       </div>
-      <button className="flex items-center gap-2 px-3 py-2.5 text-[14px] font-medium text-[#3d475c] border border-[#e0e4eb] rounded-lg hover:bg-gray-50">
-        <Settings className="w-4 h-4" />
+      <button className="flex items-center gap-1.5 h-7 px-2 text-[13px] font-medium text-[#1f242e] border border-[#e0e4eb] rounded-lg hover:bg-[#fafbfc]">
+        <Settings className="w-3.5 h-3.5 text-[#525f7a]" />
         Unit settings
       </button>
     </div>

@@ -48,12 +48,24 @@ export interface KBFolder {
   updatedAt: string;
 }
 
+/** A snapshot of the article's content at the moment of publication. New
+ *  entries are appended on every Publish; existing entries are immutable. */
+export interface ArticleVersion {
+  version: number; // 1, 2, 3...
+  content: string; // HTML snapshot
+  publishedAt: string;
+  publishedBy: Contact;
+}
+
 export interface KBArticle {
   id: string;
   folderId: string;
   unitId: string;
   title: string;
-  content: string; // HTML string from TipTap editor
+  /** Currently published HTML — what readers see. Equals
+   *  `versions[versions.length - 1].content` when the article has at least
+   *  one published version; otherwise the in-progress draft body. */
+  content: string;
   status: ArticleStatus;
   visibility: Visibility;
   owner: Contact;
@@ -62,6 +74,15 @@ export interface KBArticle {
   updatedBy: Contact;
   updatedAt: string;
   publishedAt: string | null;
+  /** Unpublished changes overlaying the published `content`. Null when no
+   *  draft is pending. Single shared draft per article — multi-user edits
+   *  use last-save-wins; `draftUpdatedBy` tracks who touched it last. */
+  draftContent: string | null;
+  draftUpdatedAt: string | null;
+  draftUpdatedBy: Contact | null;
+  /** Append-only published-version history. Empty for `status: 'draft'`
+   *  articles that have never been published. */
+  versions: ArticleVersion[];
 }
 
 export interface KBAttachment {
@@ -83,7 +104,10 @@ export type ArticleActivityKind =
   | 'folder_moved'
   | 'title_renamed'
   | 'content_updated'
-  | 'comment';
+  | 'comment'
+  | 'version_published'
+  | 'draft_saved'
+  | 'draft_discarded';
 
 /** Append-only log of things that happened to an article. Used by the
  *  Activity sidebar — both system events and user-authored comments share
@@ -105,6 +129,10 @@ export interface ArticleActivity {
     toTitle?: string;
     /** Body text for `kind: 'comment'`. */
     comment?: string;
+    /** Version numbers for `kind: 'version_published'`. fromVersion=0
+     *  marks the initial publish. */
+    fromVersion?: number;
+    toVersion?: number;
   };
 }
 

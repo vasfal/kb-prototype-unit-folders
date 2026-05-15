@@ -29,9 +29,13 @@ import {
   setFolderColor,
   upsertArticle,
   setArticleStatus,
+  setArticleContent,
   setArticleTitle,
   setArticleOwner,
   setArticleVisibility,
+  saveDraft,
+  publishArticle,
+  discardDraft,
   moveArticle,
   deleteArticle,
   getEligibleParentFolders,
@@ -66,17 +70,46 @@ export function AppShell() {
 
   const unitPath = getUnitPath(selectedUnitId).map((u) => u.name);
 
-  const handleContentSave = useCallback((article: KBArticle, content: string) => {
-    const now = new Date().toISOString();
-    const saved: KBArticle = {
-      ...article,
-      content,
-      updatedBy: contacts.oleksii,
-      updatedAt: now,
-    };
-    upsertArticle(saved);
-    setModal({ type: 'view', article: saved });
+  // Save in edit mode. Routes based on whether the article has ever been
+  // published: never-published articles save directly into `content`;
+  // published articles save into the draft layer so readers continue to
+  // see the published version.
+  const handleSaveEdit = useCallback((article: KBArticle, content: string) => {
+    const hasHistory = article.versions.length > 0;
+    const updated = hasHistory
+      ? saveDraft(article.id, content)
+      : setArticleContent(article.id, content);
+    if (updated) setModal({ type: 'view', article: { ...updated } });
   }, []);
+
+  // Publish in edit mode. Always pushes a new version snapshot, clears
+  // the draft layer, and flips status to 'published' if necessary.
+  const handlePublishEdit = useCallback(
+    (article: KBArticle, content: string) => {
+      const updated = publishArticle(article.id, content);
+      if (updated) setModal({ type: 'view', article: { ...updated } });
+    },
+    []
+  );
+
+  // Discard pending unpublished changes (from edit-mode button or
+  // actions menu). Returns the article to the last published state.
+  const handleDiscardDraft = useCallback((article: KBArticle) => {
+    const updated = discardDraft(article.id);
+    if (updated) setModal({ type: 'view', article: { ...updated } });
+  }, []);
+
+  // Stage an older version's content as the active draft and jump
+  // straight into edit mode so the user can modify before publishing.
+  // Confirmation about overwriting an existing draft is handled in the
+  // caller (ArticleView) before this fires.
+  const handleRestoreVersion = useCallback(
+    (article: KBArticle, content: string) => {
+      const updated = saveDraft(article.id, content);
+      if (updated) setModal({ type: 'edit', article: { ...updated } });
+    },
+    []
+  );
 
   const handleStatusChange = useCallback((article: KBArticle, status: ArticleStatus) => {
     if (status === 'archived') {
@@ -251,6 +284,10 @@ export function AppShell() {
         updatedBy: contacts.oleksii,
         updatedAt: now,
         publishedAt: null,
+        draftContent: null,
+        draftUpdatedAt: null,
+        draftUpdatedBy: null,
+        versions: [],
       };
       upsertArticle(newArticle);
       setDialog({ type: 'none' });
@@ -317,7 +354,10 @@ export function AppShell() {
           onClose={closeModal}
           onEdit={() => setModal({ type: 'edit', article: modal.article })}
           onEditCancel={() => setModal({ type: 'view', article: modal.article })}
-          onEditSave={handleContentSave}
+          onSaveEdit={handleSaveEdit}
+          onPublishEdit={handlePublishEdit}
+          onDiscardDraft={handleDiscardDraft}
+          onRestoreVersion={handleRestoreVersion}
           onStatusChange={handleStatusChange}
           onMove={(article) => setDialog({ type: 'move', article })}
           onDelete={(article) => setDialog({ type: 'delete-article', article })}

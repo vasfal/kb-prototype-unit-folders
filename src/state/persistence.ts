@@ -1,16 +1,16 @@
 import type { KBFolder, KBArticle, ArticleActivity } from '@/types';
 
-const STORAGE_KEY = 'kb-prototype:state-v3';
-const ACTIVITY_KEY = 'kb-prototype:activity-v3';
+const STORAGE_KEY = 'kb-prototype:state-v4';
+const ACTIVITY_KEY = 'kb-prototype:activity-v4';
 
 interface PersistedState {
-  version: 3;
+  version: 4;
   folders: KBFolder[];
   articles: KBArticle[];
 }
 
 interface PersistedActivity {
-  version: 3;
+  version: 4;
   activities: ArticleActivity[];
 }
 
@@ -30,7 +30,7 @@ export function loadKbState(): { folders: KBFolder[]; articles: KBArticle[] } | 
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedState;
-    if (parsed.version !== 3) return null;
+    if (parsed.version !== 4) return null;
     if (!Array.isArray(parsed.folders) || !Array.isArray(parsed.articles)) return null;
     return { folders: parsed.folders, articles: parsed.articles };
   } catch (e) {
@@ -43,7 +43,7 @@ export function saveKbState(folders: KBFolder[], articles: KBArticle[]): void {
   const storage = getStorage();
   if (!storage) return;
   try {
-    const payload: PersistedState = { version: 3, folders, articles };
+    const payload: PersistedState = { version: 4, folders, articles };
     storage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (e) {
     console.warn('[kb] failed to persist state', e);
@@ -68,7 +68,7 @@ export function loadActivity(): ArticleActivity[] | null {
     const raw = storage.getItem(ACTIVITY_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedActivity;
-    if (parsed.version !== 3) return null;
+    if (parsed.version !== 4) return null;
     if (!Array.isArray(parsed.activities)) return null;
     return parsed.activities;
   } catch (e) {
@@ -81,7 +81,7 @@ export function saveActivity(activities: ArticleActivity[]): void {
   const storage = getStorage();
   if (!storage) return;
   try {
-    const payload: PersistedActivity = { version: 3, activities };
+    const payload: PersistedActivity = { version: 4, activities };
     storage.setItem(ACTIVITY_KEY, JSON.stringify(payload));
   } catch (e) {
     console.warn('[kb] failed to persist activity', e);

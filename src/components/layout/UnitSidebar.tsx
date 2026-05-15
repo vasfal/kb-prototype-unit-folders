@@ -137,7 +137,7 @@ export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit, onSelectHo
   return (
     <div className="flex flex-col h-full shrink-0 w-[320px]">
       {/* Shared header */}
-      <div className="flex items-center justify-between px-3 h-14 border-b border-r border-[#edeff3] bg-white shrink-0">
+      <div className="flex items-center justify-between px-3 h-14 border-b border-r border-[#edeff3] bg-[#fafbfc] shrink-0">
         <div className="flex items-center gap-2 cursor-pointer">
           <div className="w-6 h-6 rounded bg-[#006bd6] flex items-center justify-center text-white font-bold text-[10px]">
             D
@@ -151,7 +151,7 @@ export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit, onSelectHo
       {/* Icon strip + unit tree side by side */}
       <div className="flex flex-1 min-h-0">
         {/* Icon strip */}
-        <div className="w-16 bg-[#fafbfc] border-r border-[#edeff3] flex flex-col items-center pt-3 gap-1">
+        <div className="w-16 bg-[#fafbfc] border-r border-[#edeff3] flex flex-col items-center pt-3 pb-3 gap-1">
           {sidebarNavItems.map((item) => {
             const isActive = item.key === 'units';
             const handleClick =
@@ -172,6 +172,23 @@ export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit, onSelectHo
               </button>
             );
           })}
+          {/* Bottom-pinned actions: quick-create + current-user avatar */}
+          <div className="mt-auto flex flex-col items-center gap-2">
+            <button
+              type="button"
+              className="w-7 h-7 rounded-full bg-[#006bd6] flex items-center justify-center text-white hover:bg-[#0052a3]"
+              title="Quick create"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              className="w-7 h-7 rounded-full bg-[#0891b2] flex items-center justify-center text-white text-[11px] font-medium"
+              title="Oleksii Ku"
+            >
+              OK
+            </button>
+          </div>
         </div>
 
         {/* Unit tree panel */}
@@ -193,7 +210,7 @@ export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit, onSelectHo
           </div>
 
           {/* Unit tree */}
-          <div className="flex-1 overflow-y-auto px-1 pb-2 flex flex-col gap-[2px]">
+          <div className="flex-1 overflow-y-auto px-1 pb-3 flex flex-col gap-[2px]">
             <UnitTreeItem
               unit={unitTree}
               selectedUnitId={selectedUnitId}
@@ -203,13 +220,6 @@ export function UnitSidebar({ unitTree, selectedUnitId, onSelectUnit, onSelectHo
               depth={0}
               isRoot
             />
-          </div>
-
-          {/* Bottom actions */}
-          <div className="border-t border-[#edeff3] p-3 mt-auto flex flex-col gap-1">
-            <button className="w-7 h-7 rounded-full bg-[#006bd6] flex items-center justify-center text-white">
-              <Plus className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </div>

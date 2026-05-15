@@ -3,7 +3,15 @@ import type {
   BusinessUnit,
   KBFolder,
   KBArticle,
+  ArticleVersion,
 } from '@/types';
+
+/** The on-disk shape for an article literal. Lacks the versioning fields,
+ *  which the normalizer below fills in from publish metadata. */
+type ArticleSeed = Omit<
+  KBArticle,
+  'draftContent' | 'draftUpdatedAt' | 'draftUpdatedBy' | 'versions'
+>;
 
 // ============================================================
 // CONTACTS
@@ -427,7 +435,7 @@ export const allFolders: KBFolder[] = [
 // KB ARTICLES
 // ============================================================
 
-export const allArticles: KBArticle[] = [
+const articleSeeds: ArticleSeed[] = [
   // ── Employo > Employo onboarding (root) ──
   {
     id: 'a-1',
@@ -910,6 +918,31 @@ export const allArticles: KBArticle[] = [
     publishedAt: '2025-07-16T10:00:00Z',
   },
 ];
+
+/** Promote each seed to a fully-typed KBArticle:
+ *   - Already-published seeds get a single v1 version snapshot (current
+ *     content, publishedAt timestamp, createdBy as the publisher).
+ *   - All seeds start with no pending draft. */
+function normalizeSeed(seed: ArticleSeed): KBArticle {
+  const versions: ArticleVersion[] = [];
+  if (seed.status === 'published' && seed.publishedAt) {
+    versions.push({
+      version: 1,
+      content: seed.content,
+      publishedAt: seed.publishedAt,
+      publishedBy: seed.createdBy,
+    });
+  }
+  return {
+    ...seed,
+    draftContent: null,
+    draftUpdatedAt: null,
+    draftUpdatedBy: null,
+    versions,
+  };
+}
+
+export const allArticles: KBArticle[] = articleSeeds.map(normalizeSeed);
 
 // ============================================================
 // HELPER FUNCTIONS
@@ -1646,8 +1679,35 @@ export function setArticleStatus(id: string, status: ArticleStatus): KBArticle |
   const now = new Date().toISOString();
   article.status = status;
   article.updatedAt = now;
-  if (status === 'published' && !article.publishedAt) {
+  // Publish via the status menu: snapshot current content as the next
+  // version. Bumps the version counter and logs version_published instead
+  // of the generic status_changed.
+  if (status === 'published') {
+    const prevVersion = article.versions.length;
+    const newVersion: ArticleVersion = {
+      version: prevVersion + 1,
+      content: article.content,
+      publishedAt: now,
+      publishedBy: currentUser,
+    };
+    article.versions.push(newVersion);
     article.publishedAt = now;
+    article.draftContent = null;
+    article.draftUpdatedAt = null;
+    article.draftUpdatedBy = null;
+    pushActivity(article.id, 'version_published', {
+      fromVersion: prevVersion,
+      toVersion: newVersion.version,
+    });
+    commit();
+    return article;
+  }
+  // Reverting from published → draft drops any pending unpublished
+  // changes: the article is now editable as a regular draft.
+  if (status === 'draft') {
+    article.draftContent = null;
+    article.draftUpdatedAt = null;
+    article.draftUpdatedBy = null;
   }
   pushActivity(article.id, 'status_changed', {
     fromStatus,
@@ -1747,7 +1807,9 @@ export function setArticleVisibility(
 }
 
 /** Update only the article's content body. Status is preserved — content
- *  edits don't change status (per item-8 of the refactor list). */
+ *  edits don't change status (per item-8 of the refactor list). Used for
+ *  draft articles (never-published); published articles route through
+ *  `saveDraft` instead so the live published copy isn't mutated. */
 export function setArticleContent(id: string, content: string): KBArticle | undefined {
   const article = allArticles.find((a) => a.id === id);
   if (!article) return undefined;
@@ -1755,6 +1817,84 @@ export function setArticleContent(id: string, content: string): KBArticle | unde
   article.content = content;
   article.updatedAt = new Date().toISOString();
   pushActivity(article.id, 'content_updated', {});
+  commit();
+  return article;
+}
+
+/** Persist unpublished changes against a published article. Leaves `content`
+ *  (= the live published body) untouched; readers continue to see the
+ *  published version until someone hits Publish. */
+export function saveDraft(id: string, content: string): KBArticle | undefined {
+  const article = allArticles.find((a) => a.id === id);
+  if (!article) return undefined;
+  // No-op if the draft already matches.
+  if (article.draftContent === content) return article;
+  // No draft needed if the value matches the published content and there
+  // wasn't a draft before.
+  if (article.draftContent === null && article.content === content) return article;
+  const now = new Date().toISOString();
+  article.draftContent = content;
+  article.draftUpdatedAt = now;
+  article.draftUpdatedBy = currentUser;
+  article.updatedAt = now;
+  pushActivity(article.id, 'draft_saved', {});
+  commit();
+  return article;
+}
+
+/** Drop the unpublished draft, returning the article to the last published
+ *  state. No-op if no draft was pending. */
+export function discardDraft(id: string): KBArticle | undefined {
+  const article = allArticles.find((a) => a.id === id);
+  if (!article) return undefined;
+  if (article.draftContent === null) return article;
+  article.draftContent = null;
+  article.draftUpdatedAt = null;
+  article.draftUpdatedBy = null;
+  article.updatedAt = new Date().toISOString();
+  pushActivity(article.id, 'draft_discarded', {});
+  commit();
+  return article;
+}
+
+/** Publish the article. For draft articles this is the initial publish
+ *  (v1). For published articles this commits the current draft (or the
+ *  passed content) as a new version. The new content snapshot is appended
+ *  to `versions[]` and becomes the live `content`. */
+export function publishArticle(
+  id: string,
+  content?: string
+): KBArticle | undefined {
+  const article = allArticles.find((a) => a.id === id);
+  if (!article) return undefined;
+  const now = new Date().toISOString();
+  const nextBody =
+    content !== undefined
+      ? content
+      : article.draftContent !== null
+      ? article.draftContent
+      : article.content;
+  const prevVersion = article.versions.length;
+  const newVersion: ArticleVersion = {
+    version: prevVersion + 1,
+    content: nextBody,
+    publishedAt: now,
+    publishedBy: currentUser,
+  };
+  article.versions.push(newVersion);
+  article.content = nextBody;
+  article.publishedAt = now;
+  article.draftContent = null;
+  article.draftUpdatedAt = null;
+  article.draftUpdatedBy = null;
+  article.updatedAt = now;
+  if (article.status !== 'published') {
+    article.status = 'published';
+  }
+  pushActivity(article.id, 'version_published', {
+    fromVersion: prevVersion,
+    toVersion: newVersion.version,
+  });
   commit();
   return article;
 }

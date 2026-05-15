@@ -88,7 +88,10 @@ export function ArticleCard({
           <span className="truncate">{unit?.name ?? 'Unknown'}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge status={article.status} />
+          <StatusBadge
+            status={article.status}
+            hasUnpublishedChanges={article.draftContent !== null}
+          />
           <span className="text-[12px] text-[#697a9b]">{timeAgo(article.updatedAt)}</span>
           <div
             className="w-5 h-5 rounded-md text-white text-[9px] font-medium flex items-center justify-center shrink-0"
@@ -187,7 +190,11 @@ export function ArticleRow({
 
       {/* Status */}
       <td className="py-2.5 pr-4">
-        <StatusBadge status={article.status} showPublished />
+        <StatusBadge
+          status={article.status}
+          showPublished
+          hasUnpublishedChanges={article.draftContent !== null}
+        />
       </td>
 
       {/* Updated */}
