@@ -33,7 +33,10 @@ type ViewMode = 'folder' | 'all-articles';
 interface KBRootProps {
   unitId: string;
   onArticleClick?: (article: KBArticle) => void;
-  onCreateArticle?: (folderId: string) => void;
+  /** Triggers article-create dialog. folderId is omitted in all-articles view
+   *  (user picks the folder in the dialog) and present when a writeable folder
+   *  is selected — including sub-unit folders via cascade rights. */
+  onCreateArticle?: (folderId?: string) => void;
   onCreateFolder?: () => void;
   onCreateSubFolder?: (parent: KBFolder | null) => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
@@ -127,13 +130,19 @@ export function KBRoot({
 
   const hasAnyContent = ownFolders.length > 0 || sharedFolders.length > 0;
 
-  // "Create article" is only relevant when a writeable own folder is selected.
+  // Cascade rights: a user who can write in the current unit can also write
+  // in any of its descendants. So Create article is available whenever:
+  //   - the user is on All articles (pick any folder in the dialog), or
+  //   - the selected folder is own / a sub-unit folder (preselected).
   const selectedFolder = selectedFolderId ? getFolder(selectedFolderId) : null;
-  const canCreateArticle =
-    view === 'folder' &&
+  const canCreateInSelectedFolder =
     !!selectedFolder &&
-    selectedFolder.unitId === unitId &&
-    selectedFolder.status === 'active';
+    selectedFolder.status === 'active' &&
+    (selectedFolder.unitId === unitId ||
+      getDescendantUnitIds(unitId).has(selectedFolder.unitId));
+  const canCreateArticle =
+    view === 'all-articles' ||
+    (view === 'folder' && canCreateInSelectedFolder);
 
   const toolbar = (
     <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#edeff3] shrink-0">
@@ -240,7 +249,16 @@ export function KBRoot({
         {canCreateArticle && (
           <button
             type="button"
-            onClick={() => onCreateArticle?.(selectedFolderId!)}
+            onClick={() => {
+              // Preselect folder only if we're inside a writeable folder. In
+              // All articles view we leave it undefined so the dialog asks for
+              // a folder.
+              const folderId =
+                view === 'folder' && canCreateInSelectedFolder
+                  ? selectedFolderId ?? undefined
+                  : undefined;
+              onCreateArticle?.(folderId);
+            }}
             className="flex items-center gap-1.5 h-7 px-2 text-[13px] font-medium text-white bg-[#006bd6] rounded-lg hover:bg-[#0052a3]"
           >
             <Plus className="w-4 h-4" />

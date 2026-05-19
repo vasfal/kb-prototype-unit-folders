@@ -11,11 +11,13 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 import type { KBArticle, KBFolder, ArticleStatus } from '@/types';
 import {
   currentUserPositions,
   findHomeViewingUnit,
+  getDescendantUnitIds,
   getFolder,
   getFolderPath,
   getHomeArticles,
@@ -44,7 +46,11 @@ interface HomeKBViewProps {
   onArticleStatusChange?: (article: KBArticle, status: ArticleStatus) => void;
   onArticleMove?: (article: KBArticle) => void;
   onArticleDelete?: (article: KBArticle) => void;
-  onCreateArticle?: (folderId: string, unitId: string) => void;
+  /** Triggers article-create dialog. folderId is omitted from All articles
+   *  (user picks the folder in the dialog) and present when invoked from a
+   *  writeable folder view. */
+  onCreateArticle?: (folderId?: string) => void;
+  onCreateFolder?: () => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
 }
 
@@ -500,6 +506,9 @@ function AllArticlesPanel({
                 key={r.article.id}
                 article={r.article}
                 onClick={() => onArticleClick?.(r.article)}
+                onStatusChange={onStatusChange}
+                onMove={onMove}
+                onDelete={onDelete}
               />
             ))}
           </div>
@@ -622,6 +631,7 @@ export function HomeKBView({
   onArticleMove,
   onArticleDelete,
   onCreateArticle,
+  onCreateFolder,
   onFolderAction,
 }: HomeKBViewProps) {
   const version = useFolderVersion();
@@ -674,6 +684,21 @@ export function HomeKBView({
   const viewingUnitForFolder = selectedFolder
     ? findHomeViewingUnit(selectedFolder)
     : currentUserPositions[0];
+
+  // Cascade rights — same rule as the unit-scope view: user can create only
+  // in folders owned by a position unit or any of its descendants. "From
+  // parent units" folders are read-only here (mirrors the unit-scope behavior
+  // where shared roots don't expose a Create article button).
+  const canCreateInSelectedFolder = (() => {
+    if (!selectedFolder || selectedFolder.status !== 'active') return false;
+    if (currentUserPositions.includes(selectedFolder.unitId)) return true;
+    return currentUserPositions.some((pos) =>
+      getDescendantUnitIds(pos).has(selectedFolder.unitId)
+    );
+  })();
+  const canCreateArticle =
+    !!onCreateArticle &&
+    (view === 'all-articles' || canCreateInSelectedFolder);
 
   const toolbar = (
     <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-[#edeff3] shrink-0">
@@ -748,6 +773,25 @@ export function HomeKBView({
             <List className="w-4 h-4 text-[#1f242e]" />
           </button>
         </div>
+
+        {canCreateArticle && (
+          <button
+            type="button"
+            onClick={() => {
+              // Preselect folder only when viewing a writeable folder. From
+              // All articles the dialog asks the user to pick one.
+              const folderId =
+                view === 'folder' && canCreateInSelectedFolder
+                  ? selectedFolderId ?? undefined
+                  : undefined;
+              onCreateArticle?.(folderId);
+            }}
+            className="flex items-center gap-1.5 h-7 px-2 text-[13px] font-medium text-white bg-[#006bd6] rounded-lg hover:bg-[#0052a3]"
+          >
+            <Plus className="w-4 h-4" />
+            Create article
+          </button>
+        )}
       </div>
     </div>
   );
@@ -759,6 +803,7 @@ export function HomeKBView({
         onSelectFolder={handleSelectFolder}
         isAllArticlesActive={view === 'all-articles'}
         onSelectAllArticles={handleSelectAllArticles}
+        onCreateRootFolder={onCreateFolder}
         onFolderAction={onFolderAction}
       />
 
@@ -795,10 +840,13 @@ export function HomeKBView({
             onArticleClick={onArticleClick}
             onCreateArticle={
               onCreateArticle
-                ? () => onCreateArticle(selectedFolder.id, selectedFolder.unitId)
+                ? () => onCreateArticle(selectedFolder.id)
                 : undefined
             }
             onFolderAction={onFolderAction}
+            onArticleStatusChange={onArticleStatusChange}
+            onArticleMove={onArticleMove}
+            onArticleDelete={onArticleDelete}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center bg-white">

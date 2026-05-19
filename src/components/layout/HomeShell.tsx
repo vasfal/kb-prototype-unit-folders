@@ -28,7 +28,10 @@ interface HomeShellProps {
   onArticleStatusChange?: (article: KBArticle, status: ArticleStatus) => void;
   onArticleMove?: (article: KBArticle) => void;
   onArticleDelete?: (article: KBArticle) => void;
-  onCreateArticle?: (folderId: string, unitId: string) => void;
+  /** Triggers article-create. folderId is omitted when called from the All
+   *  articles view; AppShell falls back to the user's positions. */
+  onCreateArticle?: (folderId?: string) => void;
+  onCreateFolder?: () => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
 }
 
@@ -53,6 +56,7 @@ export function HomeShell({
   onArticleMove,
   onArticleDelete,
   onCreateArticle,
+  onCreateFolder,
   onFolderAction,
 }: HomeShellProps) {
   const [activeTab, setActiveTab] = useState<HomeTab>('kb');
@@ -96,6 +100,7 @@ export function HomeShell({
           onArticleMove={onArticleMove}
           onArticleDelete={onArticleDelete}
           onCreateArticle={onCreateArticle}
+          onCreateFolder={onCreateFolder}
           onFolderAction={onFolderAction}
         />
       ) : (

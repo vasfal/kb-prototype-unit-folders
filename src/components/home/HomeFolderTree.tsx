@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Files } from 'lucide-react';
+import { Files, Plus } from 'lucide-react';
 import type { KBFolder } from '@/types';
 import { currentUserPositions, getHomeFolderSections } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
@@ -10,6 +10,7 @@ interface HomeFolderTreeProps {
   onSelectFolder: (folderId: string) => void;
   isAllArticlesActive: boolean;
   onSelectAllArticles: () => void;
+  onCreateRootFolder?: () => void;
   onFolderAction?: (action: FolderAction, folder: KBFolder) => void;
 }
 
@@ -21,6 +22,7 @@ export function HomeFolderTree({
   onSelectFolder,
   isAllArticlesActive,
   onSelectAllArticles,
+  onCreateRootFolder,
   onFolderAction,
 }: HomeFolderTreeProps) {
   const version = useFolderVersion();
@@ -59,10 +61,20 @@ export function HomeFolderTree({
       <div className="flex-1 overflow-y-auto">
         {/* My unit folders — owned by any position unit */}
         <div className="flex flex-col shrink-0">
-          <div className="px-3 pt-3 pb-1.5">
+          <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
             <span className="text-[11px] font-medium uppercase tracking-wide text-[#697a9b]">
               My units folders
             </span>
+            {onCreateRootFolder && (
+              <button
+                type="button"
+                onClick={onCreateRootFolder}
+                className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#edeff3]"
+                title="Create folder"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#525f7a]" />
+              </button>
+            )}
           </div>
           <div className="flex flex-col px-1.5 pb-2">
             {own.length === 0 ? (

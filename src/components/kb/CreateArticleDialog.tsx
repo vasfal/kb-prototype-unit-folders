@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, ChevronDown, Folder, Globe2, Lock } from 'lucide-react';
+import { ChevronDown, Folder, Globe2, Lock } from 'lucide-react';
 import type { KBFolder, Visibility } from '@/types';
 import {
   getFolder,
   getFolderDepth,
   getMaxAllowedVisibility,
   getOwnFoldersInTreeOrder,
+  getDescendantUnitIds,
   getUnit,
 } from '@/data/mock-data';
 
 interface CreateArticleDialogProps {
-  unitId: string;
+  /** Units that the user has rights to write in. The dialog walks each unit +
+   *  all of its descendants (cascade rights) to build the folder picker.
+   *  For unit scope pass `[selectedUnitId]`; for home scope pass the user's
+   *  position units. */
+  unitIds: string[];
   /** Pre-selected folder if user triggered create from inside a folder. */
   initialFolderId?: string;
   onConfirm: (data: {
@@ -25,28 +30,53 @@ interface FolderOption {
   id: string;
   label: string;
   depth: number;
+  unitId: string;
+  unitName: string;
 }
 
 export function CreateArticleDialog({
-  unitId,
+  unitIds,
   initialFolderId,
   onConfirm,
   onCancel,
 }: CreateArticleDialogProps) {
-  const unit = getUnit(unitId);
-
+  // Build the folder picker by walking every unit in `unitIds` plus all of
+  // its descendants. Dedupes units across overlapping scopes (e.g. when home
+  // positions are nested under each other).
   const folderOptions: FolderOption[] = useMemo(() => {
-    return getOwnFoldersInTreeOrder(unitId).map((f) => ({
-      id: f.id,
-      label: f.name,
-      depth: getFolderDepth(f.id),
-    }));
-  }, [unitId]);
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const root of unitIds) {
+      const ids = [root, ...Array.from(getDescendantUnitIds(root))];
+      for (const id of ids) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        ordered.push(id);
+      }
+    }
+    const result: FolderOption[] = [];
+    for (const uid of ordered) {
+      const unitName = getUnit(uid)?.name ?? 'Unknown';
+      for (const f of getOwnFoldersInTreeOrder(uid)) {
+        result.push({
+          id: f.id,
+          label: f.name,
+          depth: getFolderDepth(f.id),
+          unitId: uid,
+          unitName,
+        });
+      }
+    }
+    return result;
+  }, [unitIds]);
 
+  // Only honor the caller's preselect. Otherwise start with no folder picked
+  // so the user has to make an explicit choice (avoids accidentally creating
+  // an article in whichever folder happened to be first in the list).
   const defaultFolderId =
     initialFolderId && folderOptions.find((o) => o.id === initialFolderId)
       ? initialFolderId
-      : folderOptions[0]?.id ?? '';
+      : '';
   const defaultFolder: KBFolder | undefined = defaultFolderId
     ? getFolder(defaultFolderId)
     : undefined;
@@ -66,8 +96,6 @@ export function CreateArticleDialog({
     ? (() => {
         const f = getFolder(folderId);
         if (!f) return 'unit_and_subunits';
-        // The folder itself can be private even if its parent chain is public —
-        // walk including the folder's own visibility.
         if (f.visibility === 'current_unit_only') return 'current_unit_only';
         return getMaxAllowedVisibility(f.parentFolderId);
       })()
@@ -97,6 +125,12 @@ export function CreateArticleDialog({
   }, [folderPickerOpen]);
 
   const selectedFolder = folderOptions.find((o) => o.id === folderId);
+  // Whether the picker spans more than one unit — drives whether we annotate
+  // each option with its unit name (helpful for Home and sub-unit cascade).
+  const showUnitInOptions = useMemo(() => {
+    const seen = new Set(folderOptions.map((o) => o.unitId));
+    return seen.size > 1;
+  }, [folderOptions]);
 
   const handleSubmit = () => {
     const trimmed = title.trim();
@@ -167,7 +201,16 @@ export function CreateArticleDialog({
                 } ${selectedFolder ? 'text-[#1f242e]' : 'text-[#697a9b]'}`}
               >
                 <span className="truncate">
-                  {selectedFolder?.label ?? 'Pick a folder'}
+                  {selectedFolder ? (
+                    <>
+                      {selectedFolder.label}
+                      {showUnitInOptions && (
+                        <span className="text-[#697a9b]"> · {selectedFolder.unitName}</span>
+                      )}
+                    </>
+                  ) : (
+                    'Pick a folder'
+                  )}
                 </span>
                 <ChevronDown
                   className={`w-4 h-4 text-[#697a9b] shrink-0 transition-transform ${
@@ -179,7 +222,7 @@ export function CreateArticleDialog({
                 <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] py-1 max-h-[240px] overflow-y-auto">
                   {folderOptions.length === 0 ? (
                     <div className="px-3 py-2 text-[13px] text-[#697a9b] italic">
-                      No folders in this unit yet.
+                      No folders you can write to yet.
                     </div>
                   ) : (
                     folderOptions.map((opt) => {
@@ -206,7 +249,12 @@ export function CreateArticleDialog({
                             }`}
                             strokeWidth={1.75}
                           />
-                          <span className="truncate">{opt.label}</span>
+                          <span className="truncate flex-1">{opt.label}</span>
+                          {showUnitInOptions && (
+                            <span className="text-[11px] text-[#697a9b] shrink-0">
+                              {opt.unitName}
+                            </span>
+                          )}
                         </button>
                       );
                     })
@@ -238,15 +286,6 @@ export function CreateArticleDialog({
                 active={visibility === 'current_unit_only'}
                 onClick={() => setVisibility('current_unit_only')}
               />
-            </div>
-          </div>
-
-          {/* Current unit (readonly) */}
-          <div>
-            <label className="block text-[13px] text-[#3d475c] mb-1.5">Unit</label>
-            <div className="flex items-center gap-2 h-9 px-3 text-[14px] border border-[#e0e4eb] rounded-lg bg-[#fafbfc] text-[#525f7a]">
-              <Building2 className="w-4 h-4 text-[#697a9b] shrink-0" />
-              <span className="truncate">{unit?.name ?? 'Unknown'}</span>
             </div>
           </div>
 

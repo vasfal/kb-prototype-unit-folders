@@ -1329,6 +1329,43 @@ export function getOwnFoldersInTreeOrder(unitId: string): KBFolder[] {
   return result;
 }
 
+/** Same as `getOwnFoldersInTreeOrder` but spans the root unit + all of its
+ *  descendants. Used by the article-creation picker when the user can write
+ *  to a unit's whole subtree (cascade rights). Folders are listed unit by unit
+ *  so sub-unit folders appear right after their unit's own folders. */
+export function getOwnFoldersInTreeOrderForUnitWithDescendants(
+  rootUnitId: string
+): KBFolder[] {
+  const result: KBFolder[] = [];
+  const units = [rootUnitId, ...Array.from(getDescendantUnitIds(rootUnitId))];
+  for (const uid of units) {
+    result.push(...getOwnFoldersInTreeOrder(uid));
+  }
+  return result;
+}
+
+/** Every accessible own folder across all units where the current user holds
+ *  a position, plus the descendants of those positions (cascade rights). Used
+ *  by the Home-scope article-creation picker. */
+export function getHomeAccessibleFolders(): KBFolder[] {
+  const seenUnits = new Set<string>();
+  const ordered: string[] = [];
+  for (const posId of currentUserPositions) {
+    const ids = [posId, ...Array.from(getDescendantUnitIds(posId))];
+    for (const id of ids) {
+      if (!seenUnits.has(id)) {
+        seenUnits.add(id);
+        ordered.push(id);
+      }
+    }
+  }
+  const result: KBFolder[] = [];
+  for (const uid of ordered) {
+    result.push(...getOwnFoldersInTreeOrder(uid));
+  }
+  return result;
+}
+
 // ============================================================
 // MUTATIONS + PERSISTENCE
 // All mutations bump the kb version (so subscribers re-render) and snapshot

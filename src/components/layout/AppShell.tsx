@@ -22,6 +22,7 @@ import {
   selectedUnitId as defaultSelectedUnitId,
   getUnitPath,
   contacts,
+  currentUserPositions,
   addFolder,
   renameFolder,
   deleteFolderTree,
@@ -41,6 +42,7 @@ import {
   getEligibleParentFolders,
   getFolder,
   getFolderDepth,
+  getUnit,
 } from '@/data/mock-data';
 
 type ModalState =
@@ -54,8 +56,15 @@ type DialogState =
   | { type: 'delete-article'; article: KBArticle }
   | { type: 'move'; article: KBArticle }
   | { type: 'change-article-visibility'; article: KBArticle }
-  | { type: 'create-article'; folderId?: string; unitId: string }
-  | { type: 'create-folder'; parent: KBFolder | null; isSubFolder: boolean }
+  | { type: 'create-article'; folderId?: string; unitIds: string[] }
+  | {
+      type: 'create-folder';
+      parent: KBFolder | null;
+      isSubFolder: boolean;
+      // Home scope: lets the user pick which of their position units owns the
+      // new root folder. Omitted in unit scope (selectedUnitId implicit).
+      unitOptions?: { id: string; label: string }[];
+    }
   | { type: 'edit-folder'; folder: KBFolder }
   | { type: 'delete-folder'; folder: KBFolder }
   | { type: 'change-folder-visibility'; folder: KBFolder };
@@ -191,6 +200,7 @@ export function AppShell() {
       parentId: string | null;
       color?: string;
       visibility?: Visibility;
+      unitId?: string;
     }) => {
       if (dialog.type !== 'create-folder') return;
       // Pull the latest parent state from the dropdown (not just the dialog's
@@ -204,9 +214,14 @@ export function AppShell() {
       // to parent's visibility (which acts as the max allowed).
       const visibility: Visibility =
         result.visibility ?? parent?.visibility ?? 'unit_and_subunits';
+      // Owner unit: parent's unit if there is one; otherwise the user-picked
+      // unit from the Home unit picker; finally falls back to selectedUnitId
+      // (unit-scope create has no unit picker).
+      const unitId =
+        parent?.unitId ?? result.unitId ?? selectedUnitId;
       const newFolder: KBFolder = {
         id: `f-new-${Date.now()}`,
-        unitId: parent?.unitId ?? selectedUnitId,
+        unitId,
         parentFolderId: parent?.id ?? null,
         name: result.name,
         color,
@@ -265,10 +280,11 @@ export function AppShell() {
   const handleCreateArticleConfirm = useCallback(
     (data: { title: string; folderId: string; visibility: Visibility }) => {
       if (dialog.type !== 'create-article') return;
-      // Article unit follows the chosen folder, not the active unit view —
-      // matters in Home scope where the picker may span multiple units.
+      // Article unit follows the chosen folder, not the active scope —
+      // matters everywhere the picker spans multiple units (sub-unit cascade,
+      // home positions).
       const folder = getFolder(data.folderId);
-      const articleUnitId = folder?.unitId ?? dialog.unitId;
+      const articleUnitId = folder?.unitId ?? dialog.unitIds[0] ?? defaultSelectedUnitId;
       const now = new Date().toISOString();
       const newArticle: KBArticle = {
         id: `a-new-${Date.now()}`,
@@ -311,9 +327,24 @@ export function AppShell() {
             onArticleStatusChange={handleStatusChange}
             onArticleMove={(article) => setDialog({ type: 'move', article })}
             onArticleDelete={(article) => setDialog({ type: 'delete-article', article })}
-            onCreateArticle={(folderId, unitId) =>
-              setDialog({ type: 'create-article', folderId, unitId })
+            onCreateArticle={(folderId) =>
+              setDialog({
+                type: 'create-article',
+                folderId,
+                unitIds: currentUserPositions,
+              })
             }
+            onCreateFolder={() => {
+              const unitOptions = currentUserPositions
+                .map((id) => ({ id, label: getUnit(id)?.name ?? id }))
+                .filter((o) => !!o.label);
+              setDialog({
+                type: 'create-folder',
+                parent: null,
+                isSubFolder: false,
+                unitOptions,
+              });
+            }}
             onFolderAction={handleFolderAction}
           />
         </>
@@ -333,7 +364,11 @@ export function AppShell() {
               unitId={selectedUnitId}
               onArticleClick={(article) => setModal({ type: 'view', article })}
               onCreateArticle={(folderId) =>
-                setDialog({ type: 'create-article', folderId, unitId: selectedUnitId })
+                setDialog({
+                  type: 'create-article',
+                  folderId,
+                  unitIds: [selectedUnitId],
+                })
               }
               onCreateFolder={handleCreateRootFolder}
               onCreateSubFolder={handleCreateSubFolder}
@@ -372,7 +407,7 @@ export function AppShell() {
       {/* Article dialogs */}
       {dialog.type === 'create-article' && (
         <CreateArticleDialog
-          unitId={dialog.unitId}
+          unitIds={dialog.unitIds}
           initialFolderId={dialog.folderId}
           onConfirm={handleCreateArticleConfirm}
           onCancel={closeDialog}
@@ -395,11 +430,20 @@ export function AppShell() {
 
       {/* Folder dialogs */}
       {dialog.type === 'create-folder' && (() => {
-        // Root creation: no parent picker.
+        // Root creation: no parent picker. Unit picker is shown only when the
+        // Home scope opens this dialog (it passes unitOptions); unit-scope
+        // creates pin the root to selectedUnitId.
         if (!dialog.isSubFolder) {
+          const unitPicker = dialog.unitOptions && dialog.unitOptions.length > 0
+            ? {
+                options: dialog.unitOptions,
+                initialId: dialog.unitOptions[0].id,
+              }
+            : undefined;
           return (
             <CreateFolderDialog
               mode="create"
+              unitPicker={unitPicker}
               onConfirm={handleCreateFolderConfirm}
               onCancel={closeDialog}
             />
