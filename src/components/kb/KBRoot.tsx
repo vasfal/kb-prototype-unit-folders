@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
   Filter,
-  LayoutGrid,
-  List,
   BookOpen,
   Plus,
 } from 'lucide-react';
@@ -60,7 +58,6 @@ export function KBRoot({
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterFocus, setFilterFocus] = useState<FilterField | null>(null);
   const filterButtonRef = useRef<HTMLDivElement>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>('folder');
   const [filters, setFilters] = useState<ArticleFilters>(DEFAULT_FILTERS);
@@ -221,31 +218,6 @@ export function KBRoot({
 
         <div className="w-px h-5 bg-[#edeff3]" />
 
-        <div className="flex items-center bg-[#edeff3] rounded-lg p-[2px] h-7">
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={`flex items-center justify-center w-6 h-6 rounded-md transition-all ${
-              viewMode === 'grid'
-                ? 'bg-white shadow-[0px_1px_3px_0px_rgba(31,36,46,0.1),0px_1px_2px_-1px_rgba(31,36,46,0.1)]'
-                : ''
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4 text-[#1f242e]" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={`flex items-center justify-center w-6 h-6 rounded-md transition-all ${
-              viewMode === 'list'
-                ? 'bg-white shadow-[0px_1px_3px_0px_rgba(31,36,46,0.1),0px_1px_2px_-1px_rgba(31,36,46,0.1)]'
-                : ''
-            }`}
-          >
-            <List className="w-4 h-4 text-[#1f242e]" />
-          </button>
-        </div>
-
         {canCreateArticle && (
           <button
             type="button"
@@ -297,7 +269,6 @@ export function KBRoot({
             viewingUnitId={unitId}
             showArchived={showArchived}
             showSubUnits={showSubUnits}
-            viewMode={viewMode}
             search={search}
             filters={filters}
             onArticleClick={onArticleClick}
@@ -334,13 +305,10 @@ export function KBRoot({
           <FolderView
             folderId={selectedFolderId}
             viewingUnitId={unitId}
-            viewMode={viewMode}
             showArchived={showArchived}
             filters={filters}
-            onSelectFolder={handleSelectFolder}
             onArticleClick={onArticleClick}
             onCreateArticle={() => onCreateArticle?.(selectedFolderId)}
-            onFolderAction={onFolderAction}
             onArticleStatusChange={onArticleStatusChange}
             onArticleMove={onArticleMove}
             onArticleDelete={onArticleDelete}

@@ -1125,6 +1125,45 @@ export function getFolderDepth(folderId: string): number {
   return getFolderPath(folderId).length;
 }
 
+/** Hard cap on folder nesting (top-level + 2 sub-levels). */
+export const MAX_FOLDER_DEPTH = 3;
+
+/** Number of levels in the subtree rooted at folderId (1 = no sub-folders). */
+export function getFolderSubtreeHeight(folderId: string): number {
+  const children = getChildFolders(folderId, { includeArchived: true });
+  if (children.length === 0) return 1;
+  return 1 + Math.max(...children.map((c) => getFolderSubtreeHeight(c.id)));
+}
+
+/** Whether `folderId` may be moved under `newParentId` (null = top level)
+ *  without creating a cycle, crossing units, or exceeding MAX_FOLDER_DEPTH. */
+export function canMoveFolderUnder(
+  folderId: string,
+  newParentId: string | null
+): boolean {
+  const folder = getFolder(folderId);
+  if (!folder) return false;
+  if (newParentId === folderId) return false;
+
+  if (newParentId) {
+    const parent = getFolder(newParentId);
+    if (!parent) return false;
+    if (parent.unitId !== folder.unitId) return false;
+    // Reject moving a folder into one of its own descendants.
+    let cursor: KBFolder | undefined = parent;
+    while (cursor) {
+      if (cursor.id === folderId) return false;
+      cursor = cursor.parentFolderId ? getFolder(cursor.parentFolderId) : undefined;
+    }
+  }
+
+  // The moved folder lands one level below its new parent; its deepest
+  // descendant must still fit within the cap.
+  const newTopDepth = (newParentId ? getFolderDepth(newParentId) : 0) + 1;
+  const deepest = newTopDepth + (getFolderSubtreeHeight(folderId) - 1);
+  return deepest <= MAX_FOLDER_DEPTH;
+}
+
 /** Walks up to the root (level-1) ancestor. Returns undefined if the folder is
  *  missing entirely; returns the folder itself if it is already a root. */
 export function getRootFolder(folderId: string): KBFolder | undefined {
@@ -1653,6 +1692,70 @@ export function restoreFolderTree(folderId: string): void {
     }
   }
   commit();
+}
+
+/** Move a folder to a new parent (null = top level) and position it at
+ *  `newIndex` among its destination siblings. Re-numbers sibling sortOrder so
+ *  ordering is stable. Enforces cycle / unit / depth rules and the visibility
+ *  invariant (a folder can't be more visible than its new parent). Returns
+ *  false if the move is rejected. */
+export function moveFolder(
+  folderId: string,
+  newParentId: string | null,
+  newIndex: number
+): boolean {
+  const folder = getFolder(folderId);
+  if (!folder) return false;
+  if (!canMoveFolderUnder(folderId, newParentId)) return false;
+
+  // Capture the old parent constraint before reparenting so we can tell whether
+  // the folder's current visibility was forced by its previous parent.
+  const oldParentMax = getMaxAllowedVisibility(folder.parentFolderId);
+
+  const now = new Date().toISOString();
+  folder.parentFolderId = newParentId;
+  folder.updatedAt = now;
+
+  // Re-number destination siblings (same unit + parent), inserting the moved
+  // folder at the requested position. Includes archived folders so their
+  // relative order stays stable.
+  const siblings = allFolders
+    .filter(
+      (f) =>
+        f.unitId === folder.unitId &&
+        f.parentFolderId === newParentId &&
+        f.id !== folderId
+    )
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  const clamped = Math.max(0, Math.min(newIndex, siblings.length));
+  siblings.splice(clamped, 0, folder);
+  siblings.forEach((f, i) => {
+    f.sortOrder = i;
+  });
+
+  // Sync visibility with the new parent (cascades to the moved subtree):
+  //  - Into a private context → clamp down to private (invariant).
+  //  - Out of a private context that was forcing it private → restore public.
+  // A folder that is private at the root level (no parent forcing it) keeps its
+  // intentional privacy on reorder.
+  const newParentMax = getMaxAllowedVisibility(newParentId);
+  if (
+    newParentMax === 'current_unit_only' &&
+    folder.visibility === 'unit_and_subunits'
+  ) {
+    folder.visibility = 'current_unit_only';
+    cascadeFolderVisibility(folderId, 'current_unit_only');
+  } else if (
+    newParentMax === 'unit_and_subunits' &&
+    oldParentMax === 'current_unit_only' &&
+    folder.visibility === 'current_unit_only'
+  ) {
+    folder.visibility = 'unit_and_subunits';
+    cascadeFolderVisibility(folderId, 'unit_and_subunits');
+  }
+
+  commit();
+  return true;
 }
 
 /** Counts of articles + sub-folders inside a folder (recursive). For

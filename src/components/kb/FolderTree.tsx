@@ -7,6 +7,7 @@ import {
   FolderClosed,
   FolderOpen,
   Plus,
+  ArrowUpDown,
   MoreHorizontal,
   Pencil,
   FolderPlus,
@@ -27,6 +28,7 @@ import {
   getUnit,
 } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
+import { ReorderFoldersDialog } from './ReorderFoldersDialog';
 
 export type FolderAction =
   | 'create-sub'
@@ -290,7 +292,7 @@ export function FolderNode({
         )}
         {!isArchived && isPrivate && (
           <span
-            title="Private — only this unit can see it"
+            title="Private — visible only to people with access to this unit’s private content"
             className="shrink-0 flex items-center"
           >
             <Lock
@@ -438,6 +440,7 @@ export function FolderTree({
 }: FolderTreeProps) {
   const version = useFolderVersion();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [reorderOpen, setReorderOpen] = useState(false);
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const ownFolders = useMemo(
     () => getOwnRootFolders(unitId, { includeArchived: showArchived }),
@@ -461,6 +464,7 @@ export function FolderTree({
   }, [selectedFolderId, unitId, version]);
 
   return (
+    <>
     <aside className="w-[260px] shrink-0 border-r border-[#edeff3] bg-white flex flex-col h-full overflow-hidden">
       {/* All articles pseudo-entry — height matches the right-column search toolbar */}
       <div className="px-1.5 py-2">
@@ -488,27 +492,39 @@ export function FolderTree({
       <div className="flex flex-col min-h-0">
         <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
           <span className="text-[11px] font-medium uppercase tracking-wide text-[#697a9b]">
-            Own folders
+            Unit folders
           </span>
-          <div>
-            <button
-              ref={createTriggerRef}
-              type="button"
-              onClick={() => setCreateMenuOpen((p) => !p)}
-              className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#edeff3]"
-              title="Create folder"
-            >
-              <Plus className="w-3.5 h-3.5 text-[#525f7a]" />
-            </button>
-            {createMenuOpen && (
-              <CreateFolderMenu
-                selectedOwnFolder={selectedOwnFolder}
-                onCreateRoot={() => onCreateRootFolder?.()}
-                onCreateSub={(parent) => onCreateSubFolder?.(parent)}
-                onClose={() => setCreateMenuOpen(false)}
-                anchorRef={createTriggerRef}
-              />
+          <div className="flex items-center gap-0.5">
+            {ownFolders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setReorderOpen(true)}
+                className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#edeff3]"
+                title="Reorder folders"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5 text-[#525f7a]" />
+              </button>
             )}
+            <div className="relative">
+              <button
+                ref={createTriggerRef}
+                type="button"
+                onClick={() => setCreateMenuOpen((p) => !p)}
+                className="flex items-center justify-center w-5 h-5 rounded hover:bg-[#edeff3]"
+                title="Create folder"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#525f7a]" />
+              </button>
+              {createMenuOpen && (
+                <CreateFolderMenu
+                  selectedOwnFolder={selectedOwnFolder}
+                  onCreateRoot={() => onCreateRootFolder?.()}
+                  onCreateSub={(parent) => onCreateSubFolder?.(parent)}
+                  onClose={() => setCreateMenuOpen(false)}
+                  anchorRef={createTriggerRef}
+                />
+              )}
+            </div>
           </div>
         </div>
         <div className="flex flex-col px-1.5 pb-2 overflow-y-auto">
@@ -603,5 +619,9 @@ export function FolderTree({
         </>
       )}
     </aside>
+    {reorderOpen && (
+      <ReorderFoldersDialog unitId={unitId} onClose={() => setReorderOpen(false)} />
+    )}
+    </>
   );
 }

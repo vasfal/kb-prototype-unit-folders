@@ -2,8 +2,6 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Filter,
-  LayoutGrid,
-  List,
   FolderClosed,
   Lock,
   MoreHorizontal,
@@ -33,7 +31,6 @@ import {
 } from '../kb/article-filters';
 import { FilterPopover, type FilterField } from '../kb/FilterPopover';
 import { FilterChips } from '../kb/FilterChips';
-import { ArticleCard } from '../kb/ArticleCard';
 import { ArticleActionsMenu } from '../kb/ArticleActionsMenu';
 import { StatusBadge } from '../kb/StatusBadge';
 import { EmptyState } from '../kb/EmptyState';
@@ -290,7 +287,7 @@ function ArticleTableRow({
           </span>
           {isPrivate && (
             <span
-              title="Private — only this unit can see it"
+              title="Private — visible only to people with access to this unit’s private content"
               className="shrink-0 flex items-center"
             >
               <Lock className="w-3.5 h-3.5 text-[#697a9b]" strokeWidth={2} />
@@ -369,7 +366,6 @@ function ArticleTableRow({
 function AllArticlesPanel({
   filters,
   showArchived,
-  viewMode,
   onArticleClick,
   onSelectFolder,
   onStatusChange,
@@ -378,7 +374,6 @@ function AllArticlesPanel({
 }: {
   filters: ArticleFilters;
   showArchived: boolean;
-  viewMode: 'grid' | 'list';
   onArticleClick?: (a: KBArticle) => void;
   onSelectFolder?: (folderId: string) => void;
   onStatusChange?: (a: KBArticle, s: ArticleStatus) => void;
@@ -391,9 +386,6 @@ function AllArticlesPanel({
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-
-  // Grid mode disables grouping (matches unit AllArticlesView).
-  const effectiveGroupBy: GroupBy = viewMode === 'grid' ? 'none' : groupBy;
 
   const articles = useMemo(
     () => {
@@ -432,15 +424,15 @@ function AllArticlesPanel({
   };
 
   const groupedRows = useMemo(() => {
-    if (effectiveGroupBy === 'none') return null;
+    if (groupBy === 'none') return null;
     const map = new Map<string, Row[]>();
     for (const r of rows) {
-      const k = groupKey(r, effectiveGroupBy);
+      const k = groupKey(r, groupBy);
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(r);
     }
     return Array.from(map.entries());
-  }, [rows, effectiveGroupBy]);
+  }, [rows, groupBy]);
 
   const positionNames = currentUserPositions
     .map((id) => getUnit(id)?.name ?? id)
@@ -460,30 +452,28 @@ function AllArticlesPanel({
           {positionNames}
         </span>
         <div className="flex-1" />
-        {viewMode === 'list' && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setGroupMenuOpen((p) => !p)}
-              className={`flex items-center gap-1.5 h-7 px-2 text-[13px] border rounded-lg ${
-                groupBy !== 'none'
-                  ? 'border-[#006bd6] bg-[#ebf5ff] text-[#0052a3]'
-                  : 'border-[#e0e4eb] text-[#1f242e] hover:bg-[#fafbfc]'
-              }`}
-              title="Group articles"
-            >
-              <span>Group: {groupLabel[groupBy]}</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            {groupMenuOpen && (
-              <GroupByMenu
-                value={groupBy}
-                onChange={setGroupBy}
-                onClose={() => setGroupMenuOpen(false)}
-              />
-            )}
-          </div>
-        )}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setGroupMenuOpen((p) => !p)}
+            className={`flex items-center gap-1.5 h-7 px-2 text-[13px] border rounded-lg ${
+              groupBy !== 'none'
+                ? 'border-[#006bd6] bg-[#ebf5ff] text-[#0052a3]'
+                : 'border-[#e0e4eb] text-[#1f242e] hover:bg-[#fafbfc]'
+            }`}
+            title="Group articles"
+          >
+            <span>Group: {groupLabel[groupBy]}</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+          {groupMenuOpen && (
+            <GroupByMenu
+              value={groupBy}
+              onChange={setGroupBy}
+              onClose={() => setGroupMenuOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -499,19 +489,6 @@ function AllArticlesPanel({
               description="You'll see articles here from every unit where you hold a position."
             />
           )
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-3 gap-3 p-4">
-            {rows.map((r) => (
-              <ArticleCard
-                key={r.article.id}
-                article={r.article}
-                onClick={() => onArticleClick?.(r.article)}
-                onStatusChange={onStatusChange}
-                onMove={onMove}
-                onDelete={onDelete}
-              />
-            ))}
-          </div>
         ) : (
           <table className="w-full min-w-[1100px]">
             <thead className="sticky top-0 z-10">
@@ -636,7 +613,6 @@ export function HomeKBView({
 }: HomeKBViewProps) {
   const version = useFolderVersion();
   const [filters, setFilters] = useState<ArticleFilters>(DEFAULT_FILTERS);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterFocus, setFilterFocus] = useState<FilterField | null>(null);
   const filterButtonRef = useRef<HTMLDivElement>(null);
@@ -749,31 +725,6 @@ export function HomeKBView({
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="flex items-center bg-[#edeff3] rounded-lg p-[2px] h-7">
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={`flex items-center justify-center w-6 h-6 rounded-md transition-all ${
-              viewMode === 'grid'
-                ? 'bg-white shadow-[0px_1px_3px_0px_rgba(31,36,46,0.1),0px_1px_2px_-1px_rgba(31,36,46,0.1)]'
-                : ''
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4 text-[#1f242e]" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={`flex items-center justify-center w-6 h-6 rounded-md transition-all ${
-              viewMode === 'list'
-                ? 'bg-white shadow-[0px_1px_3px_0px_rgba(31,36,46,0.1),0px_1px_2px_-1px_rgba(31,36,46,0.1)]'
-                : ''
-            }`}
-          >
-            <List className="w-4 h-4 text-[#1f242e]" />
-          </button>
-        </div>
-
         {canCreateArticle && (
           <button
             type="button"
@@ -822,7 +773,6 @@ export function HomeKBView({
           <AllArticlesPanel
             filters={filters}
             showArchived={showArchived}
-            viewMode={viewMode}
             onArticleClick={onArticleClick}
             onSelectFolder={handleSelectFolder}
             onStatusChange={onArticleStatusChange}
@@ -833,17 +783,14 @@ export function HomeKBView({
           <FolderView
             folderId={selectedFolder.id}
             viewingUnitId={viewingUnitForFolder}
-            viewMode={viewMode}
             showArchived={showArchived}
             filters={filters}
-            onSelectFolder={handleSelectFolder}
             onArticleClick={onArticleClick}
             onCreateArticle={
               onCreateArticle
                 ? () => onCreateArticle(selectedFolder.id)
                 : undefined
             }
-            onFolderAction={onFolderAction}
             onArticleStatusChange={onArticleStatusChange}
             onArticleMove={onArticleMove}
             onArticleDelete={onArticleDelete}

@@ -22,7 +22,6 @@ import {
   getUnit,
 } from '@/data/mock-data';
 import { useFolderVersion } from '@/state/folder-store';
-import { ArticleCard } from './ArticleCard';
 import { StatusBadge } from './StatusBadge';
 import { EmptyState } from './EmptyState';
 
@@ -30,7 +29,6 @@ interface AllArticlesViewProps {
   viewingUnitId: string;
   showArchived: boolean;
   showSubUnits: boolean;
-  viewMode: 'grid' | 'list';
   /** Search query lifted from the toolbar; filters by article title. */
   search: string;
   /** Status / owner / updated filters applied on top of the base query. */
@@ -284,7 +282,7 @@ function ArticleTableRow({
           </span>
           {isPrivate && (
             <span
-              title="Private — only this unit can see it"
+              title="Private — visible only to people with access to this unit’s private content"
               className="shrink-0 flex items-center"
             >
               <Lock className="w-3.5 h-3.5 text-[#697a9b]" strokeWidth={2} />
@@ -366,7 +364,6 @@ export function AllArticlesView({
   viewingUnitId,
   showArchived,
   showSubUnits,
-  viewMode,
   search,
   filters,
   onArticleClick,
@@ -405,9 +402,6 @@ export function AllArticlesView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articles, sortKey, sortDir]);
 
-  // Grid mode disables grouping (per spec).
-  const effectiveGroupBy: GroupBy = viewMode === 'grid' ? 'none' : groupBy;
-
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -428,15 +422,15 @@ export function AllArticlesView({
 
   // Group rows preserving the current sort order.
   const groupedRows = useMemo(() => {
-    if (effectiveGroupBy === 'none') return null;
+    if (groupBy === 'none') return null;
     const map = new Map<string, Row[]>();
     for (const r of rows) {
-      const k = groupKey(r, effectiveGroupBy);
+      const k = groupKey(r, groupBy);
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(r);
     }
     return Array.from(map.entries());
-  }, [rows, effectiveGroupBy]);
+  }, [rows, groupBy]);
 
   const viewingUnit = getUnit(viewingUnitId);
   const totalLabel = `${rows.length} ${rows.length === 1 ? 'article' : 'articles'}`;
@@ -450,30 +444,28 @@ export function AllArticlesView({
         </h1>
         <span className="text-[13px] text-[#697a9b]">{totalLabel}</span>
         <div className="flex-1" />
-        {viewMode === 'list' && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setGroupMenuOpen((p) => !p)}
-              className={`flex items-center gap-1.5 h-7 px-2 text-[13px] border rounded-lg ${
-                groupBy !== 'none'
-                  ? 'border-[#006bd6] bg-[#ebf5ff] text-[#0052a3]'
-                  : 'border-[#e0e4eb] text-[#1f242e] hover:bg-[#fafbfc]'
-              }`}
-              title="Group articles"
-            >
-              <span>Group: {groupLabel[groupBy]}</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            {groupMenuOpen && (
-              <GroupByMenu
-                value={groupBy}
-                onChange={setGroupBy}
-                onClose={() => setGroupMenuOpen(false)}
-              />
-            )}
-          </div>
-        )}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setGroupMenuOpen((p) => !p)}
+            className={`flex items-center gap-1.5 h-7 px-2 text-[13px] border rounded-lg ${
+              groupBy !== 'none'
+                ? 'border-[#006bd6] bg-[#ebf5ff] text-[#0052a3]'
+                : 'border-[#e0e4eb] text-[#1f242e] hover:bg-[#fafbfc]'
+            }`}
+            title="Group articles"
+          >
+            <span>Group: {groupLabel[groupBy]}</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+          {groupMenuOpen && (
+            <GroupByMenu
+              value={groupBy}
+              onChange={setGroupBy}
+              onClose={() => setGroupMenuOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -490,19 +482,6 @@ export function AllArticlesView({
               description="Articles you can access in this unit and from shared content will appear here."
             />
           )
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-3 gap-3 p-4">
-            {rows.map((r) => (
-              <ArticleCard
-                key={r.article.id}
-                article={r.article}
-                onClick={() => onArticleClick?.(r.article)}
-                onStatusChange={onArticleStatusChange}
-                onMove={onArticleMove}
-                onDelete={onArticleDelete}
-              />
-            ))}
-          </div>
         ) : (
           <table className="w-full min-w-[1100px]">
             <thead className="sticky top-0 z-10">
