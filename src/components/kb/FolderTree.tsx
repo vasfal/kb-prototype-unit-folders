@@ -13,9 +13,9 @@ import {
   FolderPlus,
   Eye,
   Files,
-  Lock,
   Trash2,
 } from 'lucide-react';
+import { LockFilled } from './LockFilled';
 import type { KBFolder } from '@/types';
 import {
   getOwnRootFolders,
@@ -295,7 +295,7 @@ export function FolderNode({
             title="Private — visible only to people with access to this unit’s private content"
             className="shrink-0 flex items-center"
           >
-            <Lock
+            <LockFilled
               className="w-3.5 h-3.5 text-[#697a9b]"
               strokeWidth={2}
               aria-label="Private"

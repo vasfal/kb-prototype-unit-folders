@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Globe2, Lock } from 'lucide-react';
+import { Globe2 } from 'lucide-react';
+import { LockFilled } from './LockFilled';
 import type { KBFolder, Visibility } from '@/types';
 import { getMaxAllowedVisibility } from '@/data/mock-data';
 
@@ -20,7 +21,7 @@ const options: { value: Visibility; label: string; description: string; icon: Re
     value: 'current_unit_only',
     label: 'Private',
     description: 'Only people in this unit can see it. Parent and sub-units have no access, even with "Show sub-units" on.',
-    icon: <Lock className="w-4 h-4" />,
+    icon: <LockFilled className="w-4 h-4" />,
   },
 ];
 

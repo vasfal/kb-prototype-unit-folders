@@ -1,5 +1,6 @@
 import { useState, type DragEvent } from 'react';
-import { Folder, GripVertical, Lock, Unlock } from 'lucide-react';
+import { Folder, GripVertical, Unlock } from 'lucide-react';
+import { LockFilled } from './LockFilled';
 import type { KBFolder } from '@/types';
 import {
   getOwnRootFolders,
@@ -219,7 +220,7 @@ export function ReorderFoldersDialog({
                           }`}
                         >
                           {isPrivate ? (
-                            <Lock className="w-3.5 h-3.5" strokeWidth={2} />
+                            <LockFilled className="w-3.5 h-3.5" strokeWidth={2} />
                           ) : (
                             <Unlock className="w-3.5 h-3.5" strokeWidth={2} />
                           )}

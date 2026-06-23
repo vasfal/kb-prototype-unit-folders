@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { FolderClosed, Lock, MoreHorizontal } from 'lucide-react';
+import { FolderClosed, MoreHorizontal } from 'lucide-react';
+import { LockFilled } from './LockFilled';
 import type { KBArticle, ArticleStatus } from '@/types';
 import { getUnit, getFolder } from '@/data/mock-data';
 import { StatusBadge } from './StatusBadge';
@@ -78,7 +79,10 @@ export function ArticleRow({
               title="Private — visible only to people with access to this unit’s private content"
               className="shrink-0 flex items-center"
             >
-              <Lock className="w-3.5 h-3.5 text-[#697a9b]" strokeWidth={2} />
+              <LockFilled
+                className="w-3.5 h-3.5 text-[#697a9b]"
+                strokeWidth={2}
+              />
             </span>
           )}
         </div>

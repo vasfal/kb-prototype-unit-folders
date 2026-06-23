@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Globe2, Lock } from 'lucide-react';
+import { Globe2 } from 'lucide-react';
+import { LockFilled } from './LockFilled';
 import type { KBArticle, Visibility } from '@/types';
 import { getFolder, getMaxAllowedVisibility } from '@/data/mock-data';
 
@@ -25,7 +26,7 @@ const options: {
     value: 'current_unit_only',
     label: 'Private',
     description: 'Only people in this unit can see it.',
-    icon: <Lock className="w-4 h-4" />,
+    icon: <LockFilled className="w-4 h-4" />,
   },
 ];
 

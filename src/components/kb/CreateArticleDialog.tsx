@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Folder, Globe2, Lock } from 'lucide-react';
+import { ChevronDown, Folder, Globe2 } from 'lucide-react';
+import { LockFilled } from './LockFilled';
 import type { KBFolder, Visibility } from '@/types';
 import {
   getFolder,
@@ -282,7 +283,7 @@ export function CreateArticleDialog({
               <VisibilityOption
                 label="Private"
                 description="Only this unit can see it."
-                icon={<Lock className="w-4 h-4" />}
+                icon={<LockFilled className="w-4 h-4" />}
                 active={visibility === 'current_unit_only'}
                 onClick={() => setVisibility('current_unit_only')}
               />

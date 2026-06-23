@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building2, ChevronDown, Folder, Globe2, Lock } from 'lucide-react';
+import { Building2, ChevronDown, Folder, Globe2 } from 'lucide-react';
+import { LockFilled } from './LockFilled';
 import type { Visibility } from '@/types';
 import { getMaxAllowedVisibility } from '@/data/mock-data';
 import { FOLDER_COLORS, DEFAULT_FOLDER_COLOR } from './folder-icons';
@@ -348,7 +349,7 @@ export function CreateFolderDialog({
                 <VisibilityChoice
                   label="Private"
                   description="Only this unit can see it."
-                  icon={<Lock className="w-4 h-4" />}
+                  icon={<LockFilled className="w-4 h-4" />}
                   active={visibility === 'current_unit_only'}
                   onClick={() => setVisibility('current_unit_only')}
                 />

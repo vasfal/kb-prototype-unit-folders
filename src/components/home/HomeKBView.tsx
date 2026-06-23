@@ -4,7 +4,6 @@ import {
   Filter,
   FolderClosed,
   Files,
-  Lock,
   MoreHorizontal,
   ChevronsUpDown,
   ChevronUp,
@@ -31,6 +30,7 @@ import {
 } from '../kb/article-filters';
 import { FilterPopover, type FilterField } from '../kb/FilterPopover';
 import { FilterChips } from '../kb/FilterChips';
+import { LockFilled } from '../kb/LockFilled';
 import { ArticleActionsMenu } from '../kb/ArticleActionsMenu';
 import { StatusBadge } from '../kb/StatusBadge';
 import { EmptyState } from '../kb/EmptyState';
@@ -217,7 +217,10 @@ function ArticleTableRow({
               title="Private — visible only to people with access to this unit’s private content"
               className="shrink-0 flex items-center"
             >
-              <Lock className="w-3.5 h-3.5 text-[#697a9b]" strokeWidth={2} />
+              <LockFilled
+                className="w-3.5 h-3.5 text-[#697a9b]"
+                strokeWidth={2}
+              />
             </span>
           )}
         </div>
