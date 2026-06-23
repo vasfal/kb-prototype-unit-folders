@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FolderClosed, Lock, MoreHorizontal } from 'lucide-react';
 import type { KBArticle, ArticleStatus } from '@/types';
-import { getUnit } from '@/data/mock-data';
+import { getUnit, getFolder } from '@/data/mock-data';
 import { StatusBadge } from './StatusBadge';
 import { ArticleActionsMenu } from './ArticleActionsMenu';
 
@@ -56,6 +56,7 @@ export function ArticleRow({
   const isInactive = article.status === 'draft' || article.status === 'archived';
   const isPrivate = article.visibility === 'current_unit_only';
   const hasActions = !!(onStatusChange || onMove || onDelete);
+  const folderName = getFolder(article.folderId)?.name ?? '—';
 
   return (
     <tr
@@ -83,10 +84,20 @@ export function ArticleRow({
         </div>
       </td>
 
+      {/* Folder */}
+      <td className="py-2.5 pr-4">
+        <div
+          className="flex items-center gap-1 text-[13px] text-[#525f7a] min-w-0"
+          title={folderName}
+        >
+          <FolderClosed className="w-3.5 h-3.5 text-[#697a9b] shrink-0" />
+          <span className="truncate">{folderName}</span>
+        </div>
+      </td>
+
       {/* Unit */}
       <td className="py-2.5 pr-4">
         <div className="flex items-center gap-1 text-[13px] text-[#525f7a]">
-          <FolderClosed className="w-3.5 h-3.5 text-[#697a9b] shrink-0" />
           <span className="truncate">{unit?.name ?? 'Unknown'}</span>
         </div>
       </td>

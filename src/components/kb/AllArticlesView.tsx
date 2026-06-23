@@ -1,10 +1,11 @@
-import { Fragment, useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
   ChevronsUpDown,
   FolderClosed,
+  Files,
   Lock,
   MoreHorizontal,
 } from 'lucide-react';
@@ -40,7 +41,6 @@ interface AllArticlesViewProps {
   onArticleDelete?: (article: KBArticle) => void;
 }
 
-type GroupBy = 'none' | 'folder' | 'status' | 'owner';
 type SortKey = 'title' | 'folder' | 'unit' | 'status' | 'updated' | 'owner';
 type SortDir = 'asc' | 'desc';
 
@@ -48,19 +48,6 @@ const statusOrder: Record<ArticleStatus, number> = {
   published: 0,
   draft: 1,
   archived: 2,
-};
-
-const statusLabel: Record<ArticleStatus, string> = {
-  published: 'Published',
-  draft: 'Draft',
-  archived: 'Archived',
-};
-
-const groupLabel: Record<GroupBy, string> = {
-  none: 'None',
-  folder: 'Folder',
-  status: 'Status',
-  owner: 'Owner',
 };
 
 const avatarColors = [
@@ -95,6 +82,7 @@ function folderPathString(folderId: string): string {
 interface Row {
   article: KBArticle;
   folderId: string;
+  folderName: string;
   folderPath: string;
   unitName: string;
 }
@@ -107,6 +95,7 @@ function buildRows(articles: KBArticle[]): Row[] {
     return {
       article,
       folderId,
+      folderName: folder?.name ?? '—',
       folderPath: folder ? folderPathString(folder.id) : '—',
       unitName: unit?.name ?? 'Unknown',
     };
@@ -138,19 +127,6 @@ function compareRows(a: Row, b: Row, key: SortKey, dir: SortDir): number {
   }
 }
 
-function groupKey(row: Row, by: GroupBy): string {
-  switch (by) {
-    case 'folder':
-      return row.folderPath;
-    case 'status':
-      return statusLabel[row.article.status];
-    case 'owner':
-      return row.article.owner.name;
-    default:
-      return '';
-  }
-}
-
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) {
     return <ChevronsUpDown className="w-3 h-3 text-[#a8b1c2]" />;
@@ -159,51 +135,6 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
     <ChevronUp className="w-3 h-3 text-[#525f7a]" />
   ) : (
     <ChevronDown className="w-3 h-3 text-[#525f7a]" />
-  );
-}
-
-function GroupByMenu({
-  value,
-  onChange,
-  onClose,
-}: {
-  value: GroupBy;
-  onChange: (v: GroupBy) => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [onClose]);
-  const items: GroupBy[] = ['none', 'folder', 'status', 'owner'];
-  return (
-    <div
-      ref={ref}
-      className="absolute right-0 top-full mt-1 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] z-20 py-1 min-w-[160px]"
-    >
-      {items.map((item) => (
-        <button
-          key={item}
-          type="button"
-          onClick={() => {
-            onChange(item);
-            onClose();
-          }}
-          className={`flex items-center justify-between w-full px-3 py-1.5 text-[13px] text-left ${
-            value === item
-              ? 'text-[#0052a3] bg-[#ebf5ff]'
-              : 'text-[#1f242e] hover:bg-[#fafbfc]'
-          }`}
-        >
-          <span>{groupLabel[item]}</span>
-          {value === item && <span className="text-[#006bd6]">•</span>}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -257,7 +188,7 @@ function ArticleTableRow({
   onDelete?: (article: KBArticle) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { article, folderId, folderPath, unitName } = row;
+  const { article, folderId, folderName, folderPath, unitName } = row;
   const initials = article.owner.name
     .split(' ')
     .map((n) => n[0])
@@ -301,7 +232,7 @@ function ArticleTableRow({
           title={folderPath}
         >
           <FolderClosed className="w-3.5 h-3.5 text-[#697a9b] shrink-0" />
-          <span className="truncate">{folderPath}</span>
+          <span className="truncate">{folderName}</span>
         </button>
       </td>
       <td className="py-2.5 pr-4">
@@ -373,13 +304,8 @@ export function AllArticlesView({
   onArticleDelete,
 }: AllArticlesViewProps) {
   const version = useFolderVersion();
-  const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    new Set()
-  );
 
   const articles = useMemo(
     () => {
@@ -398,8 +324,6 @@ export function AllArticlesView({
     const built = buildRows(articles);
     built.sort((a, b) => compareRows(a, b, sortKey, sortDir));
     return built;
-    // getArticle dependency is stable; we re-build only when articles/sort change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articles, sortKey, sortDir]);
 
   const handleSort = (key: SortKey) => {
@@ -411,61 +335,32 @@ export function AllArticlesView({
     }
   };
 
-  const toggleGroup = (key: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  // Group rows preserving the current sort order.
-  const groupedRows = useMemo(() => {
-    if (groupBy === 'none') return null;
-    const map = new Map<string, Row[]>();
-    for (const r of rows) {
-      const k = groupKey(r, groupBy);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(r);
-    }
-    return Array.from(map.entries());
-  }, [rows, groupBy]);
-
   const viewingUnit = getUnit(viewingUnitId);
   const totalLabel = `${rows.length} ${rows.length === 1 ? 'article' : 'articles'}`;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
-      {/* Header bar */}
+      {/* Breadcrumb bar — mirrors the folder view: unit › All articles + count */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#edeff3] shrink-0">
-        <h1 className="text-[14px] font-medium text-[#1f242e]">
-          All articles{viewingUnit ? ` · ${viewingUnit.name}` : ''}
-        </h1>
-        <span className="text-[13px] text-[#697a9b]">{totalLabel}</span>
-        <div className="flex-1" />
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setGroupMenuOpen((p) => !p)}
-            className={`flex items-center gap-1.5 h-7 px-2 text-[13px] border rounded-lg ${
-              groupBy !== 'none'
-                ? 'border-[#006bd6] bg-[#ebf5ff] text-[#0052a3]'
-                : 'border-[#e0e4eb] text-[#1f242e] hover:bg-[#fafbfc]'
-            }`}
-            title="Group articles"
-          >
-            <span>Group: {groupLabel[groupBy]}</span>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-          {groupMenuOpen && (
-            <GroupByMenu
-              value={groupBy}
-              onChange={setGroupBy}
-              onClose={() => setGroupMenuOpen(false)}
-            />
+        <nav className="flex items-center gap-1.5 text-[13px] min-w-0 flex-1">
+          {viewingUnit && (
+            <>
+              <FolderClosed
+                className="w-4 h-4 text-[#697a9b] shrink-0"
+                strokeWidth={1.75}
+              />
+              <span className="text-[#525f7a] truncate">
+                {viewingUnit.name}
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-[#a8b1c2] shrink-0" />
+            </>
           )}
-        </div>
+          <Files className="w-4 h-4 text-[#697a9b] shrink-0" />
+          <span className="text-[#1f242e] font-medium truncate">
+            All articles
+          </span>
+        </nav>
+        <span className="text-[13px] text-[#697a9b] shrink-0">{totalLabel}</span>
       </div>
 
       {/* Content */}
@@ -538,55 +433,17 @@ export function AllArticlesView({
               </tr>
             </thead>
             <tbody>
-              {groupedRows
-                ? groupedRows.map(([groupName, groupRows]) => {
-                    const collapsed = collapsedGroups.has(groupName);
-                    return (
-                      <Fragment key={`g-${groupName}`}>
-                        <tr
-                          className="bg-white border-b border-[#edeff3] cursor-pointer hover:bg-[#fafbfc]"
-                          onClick={() => toggleGroup(groupName)}
-                        >
-                          <td colSpan={7} className="py-2 pl-4 pr-4">
-                            <div className="flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[#697a9b]">
-                              {collapsed ? (
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              ) : (
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              )}
-                              <span>{groupName}</span>
-                              <span className="text-[#a8b1c2] normal-case">
-                                · {groupRows.length}
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                        {!collapsed &&
-                          groupRows.map((r) => (
-                            <ArticleTableRow
-                              key={r.article.id}
-                              row={r}
-                              onArticleClick={onArticleClick}
-                              onSelectFolder={onSelectFolder}
-                              onStatusChange={onArticleStatusChange}
-                              onMove={onArticleMove}
-                              onDelete={onArticleDelete}
-                            />
-                          ))}
-                      </Fragment>
-                    );
-                  })
-                : rows.map((r) => (
-                    <ArticleTableRow
-                      key={r.article.id}
-                      row={r}
-                      onArticleClick={onArticleClick}
-                      onSelectFolder={onSelectFolder}
-                      onStatusChange={onArticleStatusChange}
-                      onMove={onArticleMove}
-                      onDelete={onArticleDelete}
-                    />
-                  ))}
+              {rows.map((r) => (
+                <ArticleTableRow
+                  key={r.article.id}
+                  row={r}
+                  onArticleClick={onArticleClick}
+                  onSelectFolder={onSelectFolder}
+                  onStatusChange={onArticleStatusChange}
+                  onMove={onArticleMove}
+                  onDelete={onArticleDelete}
+                />
+              ))}
             </tbody>
           </table>
         )}

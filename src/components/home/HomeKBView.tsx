@@ -1,14 +1,14 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Filter,
   FolderClosed,
+  Files,
   Lock,
   MoreHorizontal,
   ChevronsUpDown,
   ChevronUp,
   ChevronDown,
-  ChevronRight,
   Plus,
 } from 'lucide-react';
 import type { KBArticle, KBFolder, ArticleStatus } from '@/types';
@@ -54,26 +54,11 @@ interface HomeKBViewProps {
 type View = 'folder' | 'all-articles';
 type SortKey = 'title' | 'folder' | 'unit' | 'status' | 'updated' | 'owner';
 type SortDir = 'asc' | 'desc';
-type GroupBy = 'none' | 'folder' | 'unit' | 'status' | 'owner';
 
 const statusOrder: Record<ArticleStatus, number> = {
   published: 0,
   draft: 1,
   archived: 2,
-};
-
-const statusLabel: Record<ArticleStatus, string> = {
-  published: 'Published',
-  draft: 'Draft',
-  archived: 'Archived',
-};
-
-const groupLabel: Record<GroupBy, string> = {
-  none: 'None',
-  folder: 'Folder',
-  unit: 'Unit',
-  status: 'Status',
-  owner: 'Owner',
 };
 
 const avatarColors = [
@@ -102,6 +87,7 @@ function timeAgo(iso: string): string {
 
 interface Row {
   article: KBArticle;
+  folderName: string;
   folderPath: string;
   unitName: string;
 }
@@ -115,6 +101,7 @@ function buildRows(articles: KBArticle[]): Row[] {
     const unit = getUnit(article.unitId);
     return {
       article,
+      folderName: folder?.name ?? '—',
       folderPath,
       unitName: unit?.name ?? 'Unknown',
     };
@@ -141,66 +128,6 @@ function compareRows(a: Row, b: Row, key: SortKey, dir: SortDir): number {
     case 'owner':
       return mult * a.article.owner.name.localeCompare(b.article.owner.name);
   }
-}
-
-function groupKey(row: Row, by: GroupBy): string {
-  switch (by) {
-    case 'folder':
-      return row.folderPath;
-    case 'unit':
-      return row.unitName;
-    case 'status':
-      return statusLabel[row.article.status];
-    case 'owner':
-      return row.article.owner.name;
-    default:
-      return '';
-  }
-}
-
-function GroupByMenu({
-  value,
-  onChange,
-  onClose,
-}: {
-  value: GroupBy;
-  onChange: (v: GroupBy) => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [onClose]);
-  const items: GroupBy[] = ['none', 'folder', 'unit', 'status', 'owner'];
-  return (
-    <div
-      ref={ref}
-      className="absolute right-0 top-full mt-1 bg-white border border-[#e0e4eb] rounded-lg shadow-[0px_4px_12px_rgba(31,36,46,0.12)] z-20 py-1 min-w-[160px]"
-    >
-      {items.map((item) => (
-        <button
-          key={item}
-          type="button"
-          onClick={() => {
-            onChange(item);
-            onClose();
-          }}
-          className={`flex items-center justify-between w-full px-3 py-1.5 text-[13px] text-left ${
-            value === item
-              ? 'text-[#0052a3] bg-[#ebf5ff]'
-              : 'text-[#1f242e] hover:bg-[#fafbfc]'
-          }`}
-        >
-          <span>{groupLabel[item]}</span>
-          {value === item && <span className="text-[#006bd6]">•</span>}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
@@ -262,7 +189,7 @@ function ArticleTableRow({
   onDelete?: (a: KBArticle) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { article, folderPath, unitName } = row;
+  const { article, folderName, folderPath, unitName } = row;
   const initials = article.owner.name
     .split(' ')
     .map((n) => n[0])
@@ -306,7 +233,7 @@ function ArticleTableRow({
           title={folderPath}
         >
           <FolderClosed className="w-3.5 h-3.5 text-[#697a9b] shrink-0" />
-          <span className="truncate">{folderPath}</span>
+          <span className="truncate">{folderName}</span>
         </button>
       </td>
       <td className="py-2.5 pr-4">
@@ -383,9 +310,6 @@ function AllArticlesPanel({
   const version = useFolderVersion();
   const [sortKey, setSortKey] = useState<SortKey>('updated');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [groupBy, setGroupBy] = useState<GroupBy>('none');
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const articles = useMemo(
     () => {
@@ -414,26 +338,6 @@ function AllArticlesPanel({
     }
   };
 
-  const toggleGroup = (key: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const groupedRows = useMemo(() => {
-    if (groupBy === 'none') return null;
-    const map = new Map<string, Row[]>();
-    for (const r of rows) {
-      const k = groupKey(r, groupBy);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(r);
-    }
-    return Array.from(map.entries());
-  }, [rows, groupBy]);
-
   const positionNames = currentUserPositions
     .map((id) => getUnit(id)?.name ?? id)
     .join(' · ');
@@ -441,39 +345,18 @@ function AllArticlesPanel({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
+      {/* Breadcrumb bar — mirrors the folder view: My knowledge base + count */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#edeff3] shrink-0">
-        <h1 className="text-[14px] font-medium text-[#1f242e]">My knowledge base</h1>
-        <span className="text-[13px] text-[#697a9b]">{totalLabel}</span>
-        <span className="text-[13px] text-[#a8b1c2]">·</span>
-        <span
-          className="text-[13px] text-[#697a9b] truncate"
-          title="Aggregated from every unit where you hold a position"
-        >
-          {positionNames}
-        </span>
-        <div className="flex-1" />
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setGroupMenuOpen((p) => !p)}
-            className={`flex items-center gap-1.5 h-7 px-2 text-[13px] border rounded-lg ${
-              groupBy !== 'none'
-                ? 'border-[#006bd6] bg-[#ebf5ff] text-[#0052a3]'
-                : 'border-[#e0e4eb] text-[#1f242e] hover:bg-[#fafbfc]'
-            }`}
-            title="Group articles"
+        <nav className="flex items-center gap-1.5 text-[13px] min-w-0 flex-1">
+          <Files className="w-4 h-4 text-[#697a9b] shrink-0" />
+          <span
+            className="text-[#1f242e] font-medium truncate"
+            title={`Aggregated from every unit where you hold a position: ${positionNames}`}
           >
-            <span>Group: {groupLabel[groupBy]}</span>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-          {groupMenuOpen && (
-            <GroupByMenu
-              value={groupBy}
-              onChange={setGroupBy}
-              onClose={() => setGroupMenuOpen(false)}
-            />
-          )}
-        </div>
+            My knowledge base
+          </span>
+        </nav>
+        <span className="text-[13px] text-[#697a9b] shrink-0">{totalLabel}</span>
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -545,55 +428,17 @@ function AllArticlesPanel({
               </tr>
             </thead>
             <tbody>
-              {groupedRows
-                ? groupedRows.map(([groupName, groupRows]) => {
-                    const collapsed = collapsedGroups.has(groupName);
-                    return (
-                      <Fragment key={`g-${groupName}`}>
-                        <tr
-                          className="bg-white border-b border-[#edeff3] cursor-pointer hover:bg-[#fafbfc]"
-                          onClick={() => toggleGroup(groupName)}
-                        >
-                          <td colSpan={7} className="py-2 pl-4 pr-4">
-                            <div className="flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[#697a9b]">
-                              {collapsed ? (
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              ) : (
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              )}
-                              <span>{groupName}</span>
-                              <span className="text-[#a8b1c2] normal-case">
-                                · {groupRows.length}
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                        {!collapsed &&
-                          groupRows.map((r) => (
-                            <ArticleTableRow
-                              key={r.article.id}
-                              row={r}
-                              onArticleClick={onArticleClick}
-                              onSelectFolder={onSelectFolder}
-                              onStatusChange={onStatusChange}
-                              onMove={onMove}
-                              onDelete={onDelete}
-                            />
-                          ))}
-                      </Fragment>
-                    );
-                  })
-                : rows.map((r) => (
-                    <ArticleTableRow
-                      key={r.article.id}
-                      row={r}
-                      onArticleClick={onArticleClick}
-                      onSelectFolder={onSelectFolder}
-                      onStatusChange={onStatusChange}
-                      onMove={onMove}
-                      onDelete={onDelete}
-                    />
-                  ))}
+              {rows.map((r) => (
+                <ArticleTableRow
+                  key={r.article.id}
+                  row={r}
+                  onArticleClick={onArticleClick}
+                  onSelectFolder={onSelectFolder}
+                  onStatusChange={onStatusChange}
+                  onMove={onMove}
+                  onDelete={onDelete}
+                />
+              ))}
             </tbody>
           </table>
         )}
@@ -785,6 +630,7 @@ export function HomeKBView({
             viewingUnitId={viewingUnitForFolder}
             showArchived={showArchived}
             filters={filters}
+            onSelectFolder={handleSelectFolder}
             onArticleClick={onArticleClick}
             onCreateArticle={
               onCreateArticle

@@ -585,7 +585,8 @@ export function FolderTree({
         </>
       )}
 
-      {/* From sub-units (toggle-driven) */}
+      {/* From sub-units — always shown; the toolbar toggle only affects which
+          articles appear in the All articles list, not this section. */}
       {showSubUnits && (
         <>
           <div className="border-t border-[#edeff3]" />

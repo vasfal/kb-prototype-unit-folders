@@ -109,8 +109,9 @@ export function KBRoot({
       const rootId = getFolderPath(current.id)[0]?.id;
       const isOwn = current.unitId === unitId;
       const isSharedRoot = !!rootId && sharedFolders.some((f) => f.id === rootId);
-      const isSubUnit =
-        showSubUnits && getDescendantUnitIds(unitId).has(current.unitId);
+      // Sub-unit folders are always shown in the sidebar now, so they're always
+      // reachable.
+      const isSubUnit = getDescendantUnitIds(unitId).has(current.unitId);
       const archivedOk = showArchived || current.status === 'active';
       if ((isOwn || isSharedRoot || isSubUnit) && archivedOk) return;
     }
@@ -122,7 +123,6 @@ export function KBRoot({
     selectedFolderId,
     version,
     showArchived,
-    showSubUnits,
   ]);
 
   const hasAnyContent = ownFolders.length > 0 || sharedFolders.length > 0;
@@ -188,35 +188,42 @@ export function KBRoot({
       </div>
 
       <div className="flex items-center gap-3">
-        <label
-          className="flex items-center gap-2 cursor-pointer select-none"
-          title={
-            showSubUnits
-              ? 'Hide folders from sub-units'
-              : 'Show folders from sub-units'
-          }
-        >
-          <span className="text-[13px] text-[#1f242e]">Sub-units</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showSubUnits}
-            onClick={() => setShowSubUnits((p) => !p)}
-            className={`relative inline-flex h-[18px] w-[34px] shrink-0 cursor-pointer rounded-full transition-colors ${
-              showSubUnits ? 'bg-[#006bd6]' : 'bg-[#c1c7d0]'
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-[14px] w-[14px] rounded-full bg-white shadow transform transition-transform ${
+        {/* Sub-units toggle is only relevant for the All articles list — it
+            controls whether sub-unit articles are included. Folders from
+            sub-units are always shown in the sidebar. */}
+        {view === 'all-articles' && (
+          <>
+            <label
+              className="flex items-center gap-2 cursor-pointer select-none"
+              title={
                 showSubUnits
-                  ? 'translate-x-[16px] translate-y-[2px]'
-                  : 'translate-x-[2px] translate-y-[2px]'
-              }`}
-            />
-          </button>
-        </label>
+                  ? 'Hide articles from sub-units'
+                  : 'Show articles from sub-units'
+              }
+            >
+              <span className="text-[13px] text-[#1f242e]">Sub-units</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showSubUnits}
+                onClick={() => setShowSubUnits((p) => !p)}
+                className={`relative inline-flex h-[18px] w-[34px] shrink-0 cursor-pointer rounded-full transition-colors ${
+                  showSubUnits ? 'bg-[#006bd6]' : 'bg-[#c1c7d0]'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-[14px] w-[14px] rounded-full bg-white shadow transform transition-transform ${
+                    showSubUnits
+                      ? 'translate-x-[16px] translate-y-[2px]'
+                      : 'translate-x-[2px] translate-y-[2px]'
+                  }`}
+                />
+              </button>
+            </label>
 
-        <div className="w-px h-5 bg-[#edeff3]" />
+            <div className="w-px h-5 bg-[#edeff3]" />
+          </>
+        )}
 
         {canCreateArticle && (
           <button
@@ -248,7 +255,7 @@ export function KBRoot({
         selectedFolderId={view === 'folder' ? selectedFolderId : null}
         onSelectFolder={handleSelectFolder}
         showArchived={showArchived}
-        showSubUnits={showSubUnits}
+        showSubUnits
         isAllArticlesActive={view === 'all-articles'}
         onSelectAllArticles={handleSelectAllArticles}
         onCreateRootFolder={onCreateFolder}
@@ -307,6 +314,7 @@ export function KBRoot({
             viewingUnitId={unitId}
             showArchived={showArchived}
             filters={filters}
+            onSelectFolder={handleSelectFolder}
             onArticleClick={onArticleClick}
             onCreateArticle={() => onCreateArticle?.(selectedFolderId)}
             onArticleStatusChange={onArticleStatusChange}
